@@ -8,5 +8,5 @@ To use the telephone mode, it is required to make custom AUX connection to your 
 
 [Link to DIY AUX tutorial](http://saabworld.net/showthread.php?t=28000)  
 
-The LED has 2 animations, one on startup and one running continously.  
+The LED has 2 animations, one on startup and one running continuosly.  
 When switched to Bluetooth mode, the LED will turn from green to pink.
