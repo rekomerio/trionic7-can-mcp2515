@@ -10,3 +10,5 @@ To use the telephone mode, it is required to make custom AUX connection to your 
 
 The LED has 2 animations, one on startup and one running continuosly.  
 When switched to Bluetooth mode, the LED will turn from green to pink.
+
+[![Saab interior](http://img.youtube.com/vi/0LvEN18u2Zs/0.jpg)](http://www.youtube.com/watch?v=0LvEN18u2Zs "Saab bluetooth")
