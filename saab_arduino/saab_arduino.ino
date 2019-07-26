@@ -60,10 +60,10 @@ void loop() {
       break;
   }
 }
-/*
-   Check is the button being pressed
-   @returns {bool}
-*/
+/**
+  *  Check is the button being pressed
+  *  @returns {bool}
+  */
 bool buttonPressed() {
   if (digitalRead(BUTTON_PIN)) {
     return true;
@@ -79,7 +79,7 @@ void bluetooth(bool on) {
   digitalWrite(BLUETOOTH_PIN1, on);
   digitalWrite(TRANSISTOR_PIN, on);
 }
-/*
+/**
    Spinning LED animation with trailing tail
    @param hue        {uint8_t} - CHSV color
    @param brightness {uint8_t} - brightness of LED's
