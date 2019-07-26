@@ -3,6 +3,7 @@
 #if defined(FASTLED_VERSION) && (FASTLED_VERSION < 3001000)
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
+
 //BLUETOOTH PINS turn on bluetooth receiver
 #define BLUETOOTH_PIN0 9
 #define BLUETOOTH_PIN1 10
@@ -21,7 +22,7 @@ void setup() {
   pinMode(BLUETOOTH_PIN1, OUTPUT);
   pinMode(TRANSISTOR_PIN, OUTPUT);
   delay(100);
-  
+
   // Spinning animation at startup - 10 complete rounds
   for (uint16_t i = 0; i < NUM_LEDS * 10; i++) {
     uint16_t j = i + (NUM_LEDS / 2); // Set second LED half a round further
@@ -38,10 +39,9 @@ uint8_t mode = 0;
 void loop() {
   if (buttonPressed()) {
     mode++;
+    mode %= 2;
   }
-  if (mode > 1) {
-    mode = 0;
-  }
+
   switch (mode) {
     case 0:
       spinner(100, 50);
@@ -60,31 +60,30 @@ void loop() {
       break;
   }
 }
-
+/*
+   Check is the button being pressed
+   @returns {bool}
+*/
 bool buttonPressed() {
   if (digitalRead(BUTTON_PIN)) {
     return true;
   }
   return false;
 }
-
 /*
-  Turn bluetooth on or off
-  @params bool on - is bluetooth turned on or off
+   Turn bluetooth on or off
+   @param on {bool} - is bluetooth turned on (true) or off (false)
 */
-
 void bluetooth(bool on) {
   digitalWrite(BLUETOOTH_PIN0, on);
   digitalWrite(BLUETOOTH_PIN1, on);
   digitalWrite(TRANSISTOR_PIN, on);
 }
-
 /*
-Spinning LED animation with trailing tail
-@params uint8_t hue - CHSV color
-@params uint8_t brightness - brightness of LED's
+   Spinning LED animation with trailing tail
+   @param hue        {uint8_t} - CHSV color
+   @param brightness {uint8_t} - brightness of LED's
 */
-
 void spinner(uint8_t hue, uint8_t brightness) {
   for (uint8_t i = 0; i < NUM_LEDS; i++) {
     leds[i] = CHSV(hue, 255, brightness);
