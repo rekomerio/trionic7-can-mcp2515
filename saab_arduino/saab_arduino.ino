@@ -1,18 +1,50 @@
+
+/*
+  By Reko Meriö
+  26.07.2019
+*/
+
+#include <SPI.h>
+#include <mcp_can.h>
 #include <FastLED.h>
 
 #if defined(FASTLED_VERSION) && (FASTLED_VERSION < 3001000)
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 
-//BLUETOOTH PINS turn on bluetooth receiver
+/*** DATA PINS ***/
 #define BLUETOOTH_PIN0 9
 #define BLUETOOTH_PIN1 10
 #define TRANSISTOR_PIN 2 //TRANSISTOR PIN turns on radio telephone channel
-#define BUTTON_PIN 7
-#define LED_PIN 3
+#define BUTTON_PIN     7
+#define LED_PIN        3
+#define CAN_CS_PIN     1
 
-#define NUM_LEDS 12
+/*** CAN addresses ***/
+#define CBUS_BUTTONS   0x290
 
+/*** CAN bytes ***/
+#define AUDIO          2
+#define SID            3
+
+/*** CAN bits ***/
+
+/*   AUDIO      */
+#define NXT            2
+#define SRC            5
+#define VOL_UP         6
+#define VOL_DOWN       7
+
+/*    SID       */
+#define NPANEL         3
+#define UP             4
+#define DOWN           5
+#define SET            6
+#define CLR            7
+
+#define NUM_LEDS       12
+
+MCP_CAN CAN(CAN_CS_PIN);
 CRGB leds[NUM_LEDS];
 
 void setup() {
@@ -21,17 +53,11 @@ void setup() {
   pinMode(BLUETOOTH_PIN0, OUTPUT);
   pinMode(BLUETOOTH_PIN1, OUTPUT);
   pinMode(TRANSISTOR_PIN, OUTPUT);
-  delay(100);
 
-  // Spinning animation at startup - 10 complete rounds
-  for (uint16_t i = 0; i < NUM_LEDS * 10; i++) {
-    uint16_t j = i + (NUM_LEDS / 2); // Set second LED half a round further
-    leds[i % NUM_LEDS] = CHSV(220, 255, 255);
-    leds[j % NUM_LEDS] = CHSV(180, 255, 255);
-    FastLED.show();
-    FastLED.clear();
-    delay(50);
+  while (CAN.begin(CAN_50KBPS, MCP_8MHz) != CAN_OK) {
+    delay(100);
   }
+  startingEffect(10); // Spinning animation at startup
 }
 
 uint8_t mode = 0;
@@ -59,11 +85,11 @@ void loop() {
       delay(500);
       break;
   }
+  readCANBus();
 }
- /**
-  *  Check is the button being pressed
-  *  @returns {bool}
-  */
+/*
+    @return - is the button being pressed
+*/
 bool buttonPressed() {
   if (digitalRead(BUTTON_PIN)) {
     return true;
@@ -72,17 +98,17 @@ bool buttonPressed() {
 }
 /*
    Turn bluetooth on or off
-   @param on {bool} - is bluetooth turned on (true) or off (false)
+   @param on - is bluetooth turned on (true) or off (false)
 */
 void bluetooth(bool on) {
   digitalWrite(BLUETOOTH_PIN0, on);
   digitalWrite(BLUETOOTH_PIN1, on);
   digitalWrite(TRANSISTOR_PIN, on);
 }
-/**
+/*
    Spinning LED animation with trailing tail
-   @param hue        {uint8_t} - CHSV color
-   @param brightness {uint8_t} - brightness of LED's
+   @param hue        - CHSV color
+   @param brightness - brightness of LED's
 */
 void spinner(uint8_t hue, uint8_t brightness) {
   for (uint8_t i = 0; i < NUM_LEDS; i++) {
@@ -92,3 +118,99 @@ void spinner(uint8_t hue, uint8_t brightness) {
     delay(85);
   }
 }
+/*
+   Two spinning LED particles, one half a round further than the other
+   @param rounds - how many complete rounds to do
+*/
+void startingEffect(uint8_t rounds) {
+  for (uint16_t i = 0; i < NUM_LEDS * rounds; i++) {
+    uint16_t j = i + (NUM_LEDS / 2);
+    leds[i % NUM_LEDS] = CHSV(220, 255, 255);
+    leds[j % NUM_LEDS] = CHSV(180, 255, 255);
+    FastLED.show();
+    FastLED.clear();
+    delay(50);
+  }
+}
+
+void readCANBus() {
+  uint8_t len = 0;
+  uint8_t buf[8];
+
+  if (CAN.checkReceive() == CAN_MSGAVAIL) {
+    CAN.readMsgBuf(&len, buf);
+
+    uint16_t id = CAN.getCanId();
+    uint8_t action;
+    
+    switch (id) {
+      case CBUS_BUTTONS:
+        action = getHighBit(buf[AUDIO]);
+        if (action != 0xFF) {
+          audioActions(action);
+        }
+        action = getHighBit(buf[SID]);
+        if (action != 0xFF) {
+          sidActions(action);
+        }
+        break;
+    }
+  }
+}
+/*
+  Checks every bit of the given value and returns position of first bit
+  that is high, or if none are high, returns 0xFF (255).
+  @param value
+  @return - first high bit of the given value or 0xFF
+*/
+uint8_t getHighBit(uint8_t value) {
+  if (!value) return 0xFF;
+
+  for (uint8_t i = 0; i < 8; i++) {
+    if (value >> i & 0x01) {
+      return i;
+    }
+  }
+}
+
+/*
+
+*/
+
+void audioActions(uint8_t action) {
+  switch (action) {
+    case NXT:
+      //TODO
+      break;
+    case SRC:
+      //TODO
+      break;
+    case VOL_UP:
+      //TODO
+      break;
+    case VOL_DOWN:
+      //TODO
+      break;
+  }
+}
+
+void sidActions(uint8_t action) {
+  switch (action) {
+    case NPANEL:
+      //TODO
+      break;
+    case UP:
+      //TODO
+      break;
+    case DOWN:
+      //TODO
+      break;
+    case SET:
+      //TODO
+      break;
+    case CLR:
+      //TODO
+      break;
+  }
+}
+
