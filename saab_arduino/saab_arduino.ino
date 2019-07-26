@@ -60,7 +60,7 @@ void loop() {
       break;
   }
 }
-/**
+ /**
   *  Check is the button being pressed
   *  @returns {bool}
   */
