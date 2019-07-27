@@ -11,7 +11,9 @@
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 
-#define DEBUG
+#define LED
+//#define CANBUS
+//#define DEBUG
 
 /*** DATA PINS ***/
 #define BLUETOOTH_PIN0 9
@@ -59,11 +61,14 @@ void setup() {
   pinMode(BLUETOOTH_PIN0, OUTPUT);
   pinMode(BLUETOOTH_PIN1, OUTPUT);
   pinMode(TRANSISTOR_PIN, OUTPUT);
-
+#ifdef CANBUS
   while (CAN.begin(CAN_50KBPS, MCP_8MHz) != CAN_OK) {
     delay(100);
   }
+#endif
+#ifdef LED
   startingEffect(8); // Spinning animation at startup
+#endif
 }
 
 uint8_t mode = 0;
@@ -73,26 +78,28 @@ void loop() {
     mode++;
     mode %= 2;
   }
-  /*
-    switch (mode) {
-      case 0:
-        spinner(100, 50);
-        bluetooth(false);
-        break;
+#ifdef LED
+  switch (mode) {
+    case 0:
+      spinner(100, 50);
+      bluetooth(false);
+      break;
 
-      case 1:
-        spinner(220, 60);
-        bluetooth(true);
-        break;
+    case 1:
+      spinner(220, 60);
+      bluetooth(true);
+      break;
 
-      default:
-        FastLED.clear();
-        FastLED.show();
-        delay(500);
-        break;
-    }
-  */
+    default:
+      FastLED.clear();
+      FastLED.show();
+      delay(500);
+      break;
+  }
+#endif
+#ifdef CANBUS
   readCANBus();
+#endif
 }
 /*
     @return - is the button being pressed
@@ -161,12 +168,11 @@ void readCANBus() {
   uint8_t data[8];
   if (CAN.checkReceive() == CAN_MSGAVAIL) {
     CAN.readMsgBuf(&len, data);
-
     uint16_t id = CAN.getCanId();
     uint8_t action;
-    
+
 #ifdef DEBUG
-    Serial.println(id);
+    Serial.println(id, HEX);
 #endif
 
     switch (id) {
