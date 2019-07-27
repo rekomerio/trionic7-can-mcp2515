@@ -1,4 +1,3 @@
-
 /*
   By Reko Meriö
   26.07.2019
@@ -10,21 +9,21 @@
 #if defined(FASTLED_VERSION) && (FASTLED_VERSION < 3001000)
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
-
+/*** ENABLE FUNCTIONALITIES ***/
 #define LED
-//#define CANBUS
-//#define DEBUG
+#define CANBUS
+#define DEBUG
 
 /*** DATA PINS ***/
-#define BLUETOOTH_PIN0 9
+#define BLUETOOTH_PIN0 9  // Turns on bluetooth module
 #define BLUETOOTH_PIN1 8
-#define TRANSISTOR_PIN 2 // Turns on radio telephone channel
+#define TRANSISTOR_PIN 2  // Turns on radio telephone channel
 #define BUTTON_PIN     7
 #define LED_PIN        3
 #define CAN_CS_PIN     10
 
 /*** CAN addresses ***/
-#define CBUS_BUTTONS   0x290
+#define IBUS_BUTTONS   0x290
 
 /*** CAN bytes ***/
 #define AUDIO          2
@@ -54,7 +53,7 @@ CRGB leds[NUM_LEDS];
 
 void setup() {
 #ifdef DEBUG
-  Serial.begin(9600);
+  Serial.begin(115200);
 #endif
   FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
   pinMode(BUTTON_PIN, INPUT);
@@ -62,7 +61,7 @@ void setup() {
   pinMode(BLUETOOTH_PIN1, OUTPUT);
   pinMode(TRANSISTOR_PIN, OUTPUT);
 #ifdef CANBUS
-  while (CAN.begin(CAN_50KBPS, MCP_8MHz) != CAN_OK) {
+  while (CAN.begin(MCP_ANY, CAN_50KBPS, MCP_8MHZ) != CAN_OK) {
     delay(100);
   }
 #endif
@@ -98,7 +97,7 @@ void loop() {
   }
 #endif
 #ifdef CANBUS
-  readCANBus();
+  readCanBus();
 #endif
 }
 /*
@@ -163,20 +162,21 @@ void runAction(uint8_t action, Callback cb) {
 /*
   Reads incoming data from CAN bus, if there is any and runs desired action.
 */
-void readCANBus() {
+void readCanBus() {
   uint8_t len = 0;
   uint8_t data[8];
+  int32_t id;
   if (CAN.checkReceive() == CAN_MSGAVAIL) {
-    CAN.readMsgBuf(&len, data);
-    uint16_t id = CAN.getCanId();
-    uint8_t action;
+    CAN.readMsgBuf(&id, &len, data);
 
 #ifdef DEBUG
     Serial.println(id, HEX);
 #endif
 
+    uint8_t action;
+
     switch (id) {
-      case CBUS_BUTTONS:
+      case IBUS_BUTTONS:
         action = getHighBit(data[AUDIO]);
         runAction(action, audioActions);
 
