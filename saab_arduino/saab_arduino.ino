@@ -15,11 +15,11 @@
 
 /*** DATA PINS ***/
 #define BLUETOOTH_PIN0 9
-#define BLUETOOTH_PIN1 10
-#define TRANSISTOR_PIN 2 //TRANSISTOR PIN turns on radio telephone channel
+#define BLUETOOTH_PIN1 8
+#define TRANSISTOR_PIN 2 // Turns on radio telephone channel
 #define BUTTON_PIN     7
 #define LED_PIN        3
-#define CAN_CS_PIN     1
+#define CAN_CS_PIN     10
 
 /*** CAN addresses ***/
 #define CBUS_BUTTONS   0x290
@@ -63,7 +63,7 @@ void setup() {
   while (CAN.begin(CAN_50KBPS, MCP_8MHz) != CAN_OK) {
     delay(100);
   }
-  startingEffect(10); // Spinning animation at startup
+  startingEffect(8); // Spinning animation at startup
 }
 
 uint8_t mode = 0;
@@ -73,24 +73,25 @@ void loop() {
     mode++;
     mode %= 2;
   }
+  /*
+    switch (mode) {
+      case 0:
+        spinner(100, 50);
+        bluetooth(false);
+        break;
 
-  switch (mode) {
-    case 0:
-      spinner(100, 50);
-      bluetooth(false);
-      break;
+      case 1:
+        spinner(220, 60);
+        bluetooth(true);
+        break;
 
-    case 1:
-      spinner(220, 60);
-      bluetooth(true);
-      break;
-
-    default:
-      FastLED.clear();
-      FastLED.show();
-      delay(500);
-      break;
-  }
+      default:
+        FastLED.clear();
+        FastLED.show();
+        delay(500);
+        break;
+    }
+  */
   readCANBus();
 }
 /*
@@ -158,12 +159,15 @@ void runAction(uint8_t action, Callback cb) {
 void readCANBus() {
   uint8_t len = 0;
   uint8_t data[8];
-
   if (CAN.checkReceive() == CAN_MSGAVAIL) {
     CAN.readMsgBuf(&len, data);
 
     uint16_t id = CAN.getCanId();
     uint8_t action;
+    
+#ifdef DEBUG
+    Serial.println(id);
+#endif
 
     switch (id) {
       case CBUS_BUTTONS:
@@ -267,4 +271,3 @@ void sidActions(uint8_t action) {
       break;
   }
 }
-
