@@ -4,13 +4,14 @@
   26.07.2019
 */
 
-#include <SPI.h>
 #include <mcp_can.h>
 #include <FastLED.h>
 
 #if defined(FASTLED_VERSION) && (FASTLED_VERSION < 3001000)
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
+
+#define DEBUG
 
 /*** DATA PINS ***/
 #define BLUETOOTH_PIN0 9
@@ -31,6 +32,8 @@
 
 /*   AUDIO      */
 #define NXT            2
+#define SEEK_DOWN      3
+#define SEEK_UP        4
 #define SRC            5
 #define VOL_UP         6
 #define VOL_DOWN       7
@@ -48,6 +51,9 @@ MCP_CAN CAN(CAN_CS_PIN);
 CRGB leds[NUM_LEDS];
 
 void setup() {
+#ifdef DEBUG
+  Serial.begin(9600);
+#endif
   FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
   pinMode(BUTTON_PIN, INPUT);
   pinMode(BLUETOOTH_PIN0, OUTPUT);
@@ -133,33 +139,46 @@ void startingEffect(uint8_t rounds) {
   }
 }
 
+typedef void (*Callback) (uint8_t action);
+
+void runAction(uint8_t action, Callback cb);
+/*
+  Runs given function, if given action is less than 8.
+  One byte has 8 bits, so only actions between 0-7 are accepted.
+*/
+void runAction(uint8_t action, Callback cb) {
+  if (action < 8) {
+    cb(action);
+  }
+}
+
+/*
+  Reads incoming data from CAN bus, if there is any and runs desired action.
+*/
 void readCANBus() {
   uint8_t len = 0;
-  uint8_t buf[8];
+  uint8_t data[8];
 
   if (CAN.checkReceive() == CAN_MSGAVAIL) {
-    CAN.readMsgBuf(&len, buf);
+    CAN.readMsgBuf(&len, data);
 
     uint16_t id = CAN.getCanId();
     uint8_t action;
-    
+
     switch (id) {
       case CBUS_BUTTONS:
-        action = getHighBit(buf[AUDIO]);
-        if (action != 0xFF) {
-          audioActions(action);
-        }
-        action = getHighBit(buf[SID]);
-        if (action != 0xFF) {
-          sidActions(action);
-        }
+        action = getHighBit(data[AUDIO]);
+        runAction(action, audioActions);
+
+        action = getHighBit(data[SID]);
+        runAction(action, sidActions);
         break;
     }
   }
 }
 /*
-  Checks every bit of the given value and returns position of first bit
-  that is high, or if none are high, returns 0xFF (255).
+  Checks every bit of the given value until finds the first high bit and then
+  returns the position of that; or if none are high, returns 0xFF (255).
   @param value
   @return - first high bit of the given value or 0xFF
 */
@@ -173,23 +192,43 @@ uint8_t getHighBit(uint8_t value) {
   }
 }
 
-/*
-
-*/
-
 void audioActions(uint8_t action) {
   switch (action) {
     case NXT:
       //TODO
+#ifdef DEBUG
+      Serial.println("NEXT");
+#endif
+      break;
+    case SEEK_DOWN:
+      //TODO change the track down
+#ifdef DEBUG
+      Serial.println("SEEK DOWN");
+#endif
+      break;
+    case SEEK_UP:
+      //TODO change the track up
+#ifdef DEBUG
+      Serial.println("SEEK UP");
+#endif
       break;
     case SRC:
       //TODO
+#ifdef DEBUG
+      Serial.println("SRC");
+#endif
       break;
     case VOL_UP:
       //TODO
+#ifdef DEBUG
+      Serial.println("VOL+");
+#endif
       break;
     case VOL_DOWN:
       //TODO
+#ifdef DEBUG
+      Serial.println("VOL-");
+#endif
       break;
   }
 }
@@ -198,18 +237,33 @@ void sidActions(uint8_t action) {
   switch (action) {
     case NPANEL:
       //TODO
+#ifdef DEBUG
+      Serial.println("NIGHT PANEL");
+#endif
       break;
     case UP:
       //TODO
+#ifdef DEBUG
+      Serial.println("UP");
+#endif
       break;
     case DOWN:
       //TODO
+#ifdef DEBUG
+      Serial.println("DOWN");
+#endif
       break;
     case SET:
       //TODO
+#ifdef DEBUG
+      Serial.println("SET");
+#endif
       break;
     case CLR:
       //TODO
+#ifdef DEBUG
+      Serial.println("CLEAR");
+#endif
       break;
   }
 }
