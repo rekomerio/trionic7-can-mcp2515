@@ -1,6 +1,6 @@
 /*
   By Reko Meriö
-  26.07.2019
+  Last update: 27.07.2019
 */
 
 #include <mcp_can.h>
@@ -10,9 +10,9 @@
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 /*** ENABLE FUNCTIONALITIES ***/
-#define LED
-#define CANBUS
-#define DEBUG
+#define LED            1
+#define CANBUS         0
+#define DEBUG          0
 
 /*** DATA PINS ***/
 #define BLUETOOTH_PIN0 9  // Turns on bluetooth module
@@ -52,7 +52,7 @@ MCP_CAN CAN(CAN_CS_PIN);
 CRGB leds[NUM_LEDS];
 
 void setup() {
-#ifdef DEBUG
+#if DEBUG
   Serial.begin(115200);
 #endif
   FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
@@ -60,12 +60,12 @@ void setup() {
   pinMode(BLUETOOTH_PIN0, OUTPUT);
   pinMode(BLUETOOTH_PIN1, OUTPUT);
   pinMode(TRANSISTOR_PIN, OUTPUT);
-#ifdef CANBUS
+#if CANBUS
   while (CAN.begin(MCP_ANY, CAN_50KBPS, MCP_8MHZ) != CAN_OK) {
     delay(100);
   }
 #endif
-#ifdef LED
+#if LED
   startingEffect(8); // Spinning animation at startup
 #endif
 }
@@ -77,7 +77,7 @@ void loop() {
     mode++;
     mode %= 2;
   }
-#ifdef LED
+#if LED
   switch (mode) {
     case 0:
       spinner(100, 50);
@@ -96,7 +96,7 @@ void loop() {
       break;
   }
 #endif
-#ifdef CANBUS
+#if CANBUS
   readCanBus();
 #endif
 }
@@ -169,7 +169,7 @@ void readCanBus() {
   if (CAN.checkReceive() == CAN_MSGAVAIL) {
     CAN.readMsgBuf(&id, &len, data);
 
-#ifdef DEBUG
+#if DEBUG
     Serial.println(id, HEX);
 #endif
 
@@ -206,37 +206,37 @@ void audioActions(uint8_t action) {
   switch (action) {
     case NXT:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("NEXT");
 #endif
       break;
     case SEEK_DOWN:
       //TODO change the track down
-#ifdef DEBUG
+#if DEBUG
       Serial.println("SEEK DOWN");
 #endif
       break;
     case SEEK_UP:
       //TODO change the track up
-#ifdef DEBUG
+#if DEBUG
       Serial.println("SEEK UP");
 #endif
       break;
     case SRC:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("SRC");
 #endif
       break;
     case VOL_UP:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("VOL+");
 #endif
       break;
     case VOL_DOWN:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("VOL-");
 #endif
       break;
@@ -247,31 +247,31 @@ void sidActions(uint8_t action) {
   switch (action) {
     case NPANEL:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("NIGHT PANEL");
 #endif
       break;
     case UP:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("UP");
 #endif
       break;
     case DOWN:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("DOWN");
 #endif
       break;
     case SET:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("SET");
 #endif
       break;
     case CLR:
       //TODO
-#ifdef DEBUG
+#if DEBUG
       Serial.println("CLEAR");
 #endif
       break;
