@@ -105,10 +105,13 @@ void loop() {
     @return - is the button being pressed
 */
 bool buttonPressed() {
-  if (digitalRead(BUTTON_PIN)) {
-    delay(500);
+  static bool lastState = false;
+  bool buttonState = digitalRead(BUTTON_PIN);
+  if (buttonState && lastState != buttonState) {
+    lastState = buttonState;
     return true;
   }
+  lastState = buttonState;
   return false;
 }
 /*
