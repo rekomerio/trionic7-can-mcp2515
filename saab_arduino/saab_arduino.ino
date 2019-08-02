@@ -102,7 +102,9 @@ void loop() {
 #endif
 }
 /*
-    @return - is the button being pressed
+    Saves the previous state of button in bool lastState.
+    Returns true only once when button is being pressed. Returns true again
+    after button has been released and then pressed again.
 */
 bool buttonPressed() {
   static bool lastState = false;
