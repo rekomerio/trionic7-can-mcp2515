@@ -9,6 +9,7 @@
 #if defined(FASTLED_VERSION) && (FASTLED_VERSION < 3001000)
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
+
 /*** ENABLE FUNCTIONALITIES ***/
 #define LED            1
 #define CANBUS         0
@@ -66,7 +67,7 @@ void setup() {
   }
 #endif
 #if LED
-  startingEffect(8); // Spinning animation at startup
+  startingEffect(5); // Spinning animation at startup
 #endif
 }
 
@@ -105,6 +106,7 @@ void loop() {
 */
 bool buttonPressed() {
   if (digitalRead(BUTTON_PIN)) {
+    delay(500);
     return true;
   }
   return false;
@@ -122,14 +124,15 @@ void bluetooth(bool on) {
    Spinning LED animation with trailing tail
    @param hue        - CHSV color
    @param brightness - brightness of LED's
+   i is static variable, so it is initialized only once and remembers its position after function exits
 */
 void spinner(uint8_t hue, uint8_t brightness) {
-  for (uint8_t i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CHSV(hue, 255, brightness);
-    FastLED.show();
-    fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
-    delay(85);
-  }
+  static uint8_t i = 0;
+  leds[i++] = CHSV(hue, 255, brightness);
+  i %= NUM_LEDS; 
+  FastLED.show();
+  fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
+  delay(85);
 }
 /*
    Two spinning LED particles, one half a round further than the other
@@ -146,7 +149,7 @@ void startingEffect(uint8_t rounds) {
   }
 }
 
-typedef void (*Callback) (uint8_t action);
+typedef void (*Callback) (uint8_t);
 
 void runAction(uint8_t action, Callback cb);
 /*
@@ -163,17 +166,15 @@ void runAction(uint8_t action, Callback cb) {
   Reads incoming data from CAN bus, if there is any and runs desired action.
 */
 void readCanBus() {
+  uint8_t action;
   uint8_t len = 0;
   uint8_t data[8];
-  int32_t id;
+  uint32_t id;
+
   if (CAN.checkReceive() == CAN_MSGAVAIL) {
     CAN.readMsgBuf(&id, &len, data);
 
-#if DEBUG
     Serial.println(id, HEX);
-#endif
-
-    uint8_t action;
 
     switch (id) {
       case IBUS_BUTTONS:
@@ -206,39 +207,27 @@ void audioActions(uint8_t action) {
   switch (action) {
     case NXT:
       //TODO
-#if DEBUG
       Serial.println("NEXT");
-#endif
       break;
     case SEEK_DOWN:
       //TODO change the track down
-#if DEBUG
       Serial.println("SEEK DOWN");
-#endif
       break;
     case SEEK_UP:
       //TODO change the track up
-#if DEBUG
       Serial.println("SEEK UP");
-#endif
       break;
     case SRC:
       //TODO
-#if DEBUG
       Serial.println("SRC");
-#endif
       break;
     case VOL_UP:
       //TODO
-#if DEBUG
       Serial.println("VOL+");
-#endif
       break;
     case VOL_DOWN:
       //TODO
-#if DEBUG
       Serial.println("VOL-");
-#endif
       break;
   }
 }
@@ -247,33 +236,23 @@ void sidActions(uint8_t action) {
   switch (action) {
     case NPANEL:
       //TODO
-#if DEBUG
       Serial.println("NIGHT PANEL");
-#endif
       break;
     case UP:
       //TODO
-#if DEBUG
       Serial.println("UP");
-#endif
       break;
     case DOWN:
       //TODO
-#if DEBUG
       Serial.println("DOWN");
-#endif
       break;
     case SET:
       //TODO
-#if DEBUG
       Serial.println("SET");
-#endif
       break;
     case CLR:
       //TODO
-#if DEBUG
       Serial.println("CLEAR");
-#endif
       break;
   }
 }
