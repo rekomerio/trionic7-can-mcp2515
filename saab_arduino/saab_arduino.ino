@@ -18,8 +18,8 @@
 /*** DATA PINS ***/
 #define BLUETOOTH_PIN0 9  // Turns on bluetooth module
 #define BLUETOOTH_PIN1 8
-#define TRANSISTOR_PIN 2  // Turns on radio telephone channel
-#define BUTTON_PIN     7
+#define TRANSISTOR_PIN 7  // Turns on radio telephone channel
+#define BUTTON_PIN     2
 #define LED_PIN        3
 #define CAN_CS_PIN     10
 
@@ -75,8 +75,7 @@ uint8_t mode = 0;
 
 void loop() {
   if (buttonPressed()) {
-    mode++;
-    mode %= 2;
+    ++mode %= 2;
   }
 #if LED
   switch (mode) {
@@ -105,6 +104,8 @@ void loop() {
     Saves the previous state of button in bool lastState.
     Returns true only once when button is being pressed. Returns true again
     after button has been released and then pressed again.
+    Interrupt could be used here, but the button I have sometimes reads
+    false clicks.
 */
 bool buttonPressed() {
   static bool lastState = false;
@@ -134,7 +135,7 @@ void bluetooth(bool on) {
 void spinner(uint8_t hue, uint8_t brightness) {
   static uint8_t i = 0;
   leds[i++] = CHSV(hue, 255, brightness);
-  i %= NUM_LEDS; 
+  i %= NUM_LEDS;
   FastLED.show();
   fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
   delay(85);
