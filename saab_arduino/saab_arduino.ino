@@ -134,11 +134,12 @@ void bluetooth(bool on) {
 */
 void spinner(uint8_t hue, uint8_t brightness) {
   static uint8_t i = 0;
-  leds[i++] = CHSV(hue, 255, brightness);
-  i %= NUM_LEDS;
-  FastLED.show();
-  fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
-  delay(85);
+  EVERY_N_MILLISECONDS(85) {
+    leds[i++] = CHSV(hue, 255, brightness);
+    i %= NUM_LEDS;
+    FastLED.show();
+    fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
+  }
 }
 /*
    Two spinning LED particles, one half a round further than the other
