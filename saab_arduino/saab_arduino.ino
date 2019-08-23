@@ -1,6 +1,5 @@
 /*
   By Reko Meriö
-  Last update: 27.07.2019
 */
 
 #include <mcp_can.h>
@@ -11,9 +10,9 @@
 #endif
 
 /*** ENABLE FUNCTIONALITIES ***/
-#define LED            1
-#define CANBUS         0
-#define DEBUG          0
+#define LED            0
+#define CANBUS         1
+#define DEBUG          1
 
 /*** DATA PINS ***/
 #define BLUETOOTH_PIN0 9  // Turns on bluetooth module
@@ -62,9 +61,10 @@ void setup() {
   pinMode(BLUETOOTH_PIN1, OUTPUT);
   pinMode(TRANSISTOR_PIN, OUTPUT);
 #if CANBUS
-  while (CAN.begin(MCP_ANY, CAN_50KBPS, MCP_8MHZ) != CAN_OK) {
+  while (CAN.begin(MCP_ANY, CAN_500KBPS, MCP_8MHZ) != CAN_OK) {
     delay(100);
   }
+  CAN.setMode(MCP_NORMAL);
 #endif
 #if LED
   startingEffect(5); // Spinning animation at startup
@@ -81,12 +81,10 @@ void loop() {
   switch (mode) {
     case 0:
       spinner(100, 50);
-      bluetooth(false);
       break;
 
     case 1:
       spinner(220, 60);
-      bluetooth(true);
       break;
 
     default:
@@ -176,13 +174,10 @@ void readCanBus() {
   uint8_t action;
   uint8_t len = 0;
   uint8_t data[8];
-  uint32_t id;
+  long unsigned id;
 
   if (CAN.checkReceive() == CAN_MSGAVAIL) {
     CAN.readMsgBuf(&id, &len, data);
-
-    Serial.println(id, HEX);
-
     switch (id) {
       case IBUS_BUTTONS:
         action = getHighBit(data[AUDIO]);
@@ -226,6 +221,7 @@ void audioActions(uint8_t action) {
       break;
     case SRC:
       //TODO
+      bluetooth(!digitalRead(BLUETOOTH_PIN0));
       Serial.println("SRC");
       break;
     case VOL_UP:
