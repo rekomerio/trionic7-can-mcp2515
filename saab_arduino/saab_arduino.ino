@@ -26,6 +26,7 @@
 
 /*** CAN addresses ***/
 #define IBUS_BUTTONS   0x290
+#define ENGINE         0x460
 
 /*** CAN bytes ***/
 #define AUDIO          2
@@ -48,12 +49,19 @@
 #define SET            6
 #define CLR            7
 
-/*** CAN speeds for T7 ***/
+/*    ENGINE    */
+#define RPM1           1
+#define RPM0           2
+#define SPD1           3
+#define SPD0           4
+
+/*** CAN speeds for Trionic 7 ***/
 #define I_BUS          CAN_47KBPS
 #define P_BUS          CAN_500KBPS
 
+#define MAX_RPM        6000
+#define MAX_SPD        240
 #define NUM_LEDS       12
-#define BRIGHTNESS     50
 
 MCP_CAN CAN(CAN_CS_PIN);
 CRGB leds[NUM_LEDS];
@@ -74,19 +82,25 @@ void setup() {
   CAN.setMode(MCP_NORMAL);
 #endif
 #if LED
-  startingEffect(5); // Spinning animation at startup
+  ledSweep(); // Sweep all leds on and then off
 #endif
 }
 
 uint8_t hue = 100;   // Green
+uint8_t brightness = 50;
+uint8_t ledMode = 0;
 
 void loop() {
   if (buttonPressed()) {
-    hue += 25;
+    ++ledMode %= 3;
   }
+
 #if LED
-  spinner();
+  if (!ledMode) {
+    spinner();
+  }
 #endif
+
 #if CANBUS
   readCanBus();
 #endif
@@ -138,24 +152,43 @@ void previousTrack() {
 void spinner() {
   static uint8_t i = 0;
   EVERY_N_MILLISECONDS(85) {
-    leds[i++] = CHSV(hue, 255, BRIGHTNESS);
+    leds[i++] = CHSV(hue, 255, brightness);
     i %= NUM_LEDS;
     FastLED.show();
-    fadeToBlackBy(leds, NUM_LEDS, BRIGHTNESS / (NUM_LEDS / 4));
+    fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
   }
 }
-/*
-   Two spinning LED particles, one half a round further than the other
-   @param rounds - how many complete rounds to do
+
+/* Visualizes given value with leds.
+  Color range is from green to red.
+  Green : 100
+  Red   : 0
 */
-void startingEffect(uint8_t rounds) {
-  for (uint16_t i = 0; i < NUM_LEDS * rounds; i++) {
-    uint16_t j = i + (NUM_LEDS / 2);
-    leds[i % NUM_LEDS] = CHSV(220, 255, 255);
-    leds[j % NUM_LEDS] = CHSV(180, 255, 255);
+
+void gauge(uint16_t val, uint16_t maximum) {
+  val = map(val, 0, maximum, 0, NUM_LEDS);
+  FastLED.clear();
+  for (uint8_t i = 0; i < val; i++) {
+    leds[i] = CHSV(100 - i * (100 / NUM_LEDS), 255, brightness);
+  }
+  FastLED.show();
+}
+
+/*
+  Sweep through the LED ring, first by coloring leds one by one
+  and then clearing them again one by one.
+*/
+
+void ledSweep() {
+  for (uint8_t i = 0; i < NUM_LEDS; i++) {
+    leds[i] = CHSV(100 / NUM_LEDS * i, 255, 255);
     FastLED.show();
-    FastLED.clear();
-    delay(50);
+    delay(40);
+  }
+  for (uint8_t i = NUM_LEDS - 1; i >= 0; i--) {
+    leds[i] = CHSV(0, 0, 0);
+    FastLED.show();
+    delay(40);
   }
 }
 
@@ -191,16 +224,20 @@ void readCanBus() {
         action = getHighBit(data[SID]);
         runAction(action, sidActions);
         break;
+      case ENGINE:
+        engineActions(data);
+        break;
     }
   }
 }
+
 /*
   Checks every bit of the given value until finds the first high bit and then
   returns the position of that; or if none are high, returns 0xFF (255).
   @param value
   @return - first high bit of the given value or 0xFF
 */
-uint8_t getHighBit(uint8_t value) {
+uint8_t getHighBit(const uint8_t value) {
   if (!value) return 0xFF;
 
   for (uint8_t i = 0; i < 8; i++) {
@@ -210,7 +247,7 @@ uint8_t getHighBit(uint8_t value) {
   }
 }
 
-void audioActions(uint8_t action) {
+void audioActions(const uint8_t action) {
   switch (action) {
     case NXT:
       //TODO
@@ -239,7 +276,7 @@ void audioActions(uint8_t action) {
   }
 }
 
-void sidActions(uint8_t action) {
+void sidActions(const uint8_t action) {
   switch (action) {
     case NPANEL:
       //TODO
@@ -254,12 +291,33 @@ void sidActions(uint8_t action) {
       Serial.println("DOWN");
       break;
     case SET:
-      //TODO
+      brightness = constrain(brightness + 10, 10, 250);
       Serial.println("SET");
       break;
     case CLR:
-      //TODO
+      brightness = constrain(brightness - 10, 10, 250);
       Serial.println("CLEAR");
       break;
   }
+}
+
+void engineActions(const uint8_t data[]) {
+  uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
+  uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
+#if LED
+  switch (ledMode) {
+    case 1:
+      gauge(rpm, MAX_RPM);
+      Serial.println(rpm);
+      break;
+    case 2:
+      gauge(spd, MAX_SPD);
+      Serial.println(spd);
+      break;
+  }
+#endif
+}
+
+uint16_t combineBytes(uint8_t _byte1, uint8_t _byte2) {
+  return (_byte1 << 8 | _byte2);
 }
