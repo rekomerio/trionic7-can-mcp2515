@@ -10,16 +10,18 @@
 #endif
 
 /*** ENABLE FUNCTIONALITIES ***/
-#define LED            0
+#define LED            1
 #define CANBUS         1
 #define DEBUG          1
 
 /*** DATA PINS ***/
-#define BLUETOOTH_PIN0 9  // Turns on bluetooth module
-#define BLUETOOTH_PIN1 8
-#define TRANSISTOR_PIN 7  // Turns on radio telephone channel
 #define BUTTON_PIN     2
 #define LED_PIN        3
+#define BT_PREVIOUS    4
+#define BT_NEXT        5
+#define TRANSISTOR_PIN 7  // Turns on radio telephone channel
+#define BLUETOOTH_PIN0 8  // Turns on bluetooth module
+#define BLUETOOTH_PIN1 9
 #define CAN_CS_PIN     10
 
 /*** CAN addresses ***/
@@ -46,7 +48,12 @@
 #define SET            6
 #define CLR            7
 
+/*** CAN speeds for T7 ***/
+#define I_BUS          CAN_47KBPS
+#define P_BUS          CAN_500KBPS
+
 #define NUM_LEDS       12
+#define BRIGHTNESS     50
 
 MCP_CAN CAN(CAN_CS_PIN);
 CRGB leds[NUM_LEDS];
@@ -61,7 +68,7 @@ void setup() {
   pinMode(BLUETOOTH_PIN1, OUTPUT);
   pinMode(TRANSISTOR_PIN, OUTPUT);
 #if CANBUS
-  while (CAN.begin(MCP_ANY, CAN_500KBPS, MCP_8MHZ) != CAN_OK) {
+  while (CAN.begin(MCP_ANY, I_BUS, MCP_8MHZ) != CAN_OK) {
     delay(100);
   }
   CAN.setMode(MCP_NORMAL);
@@ -71,28 +78,14 @@ void setup() {
 #endif
 }
 
-uint8_t mode = 0;
+uint8_t hue = 100;   // Green
 
 void loop() {
   if (buttonPressed()) {
-    ++mode %= 2;
+    hue += 25;
   }
 #if LED
-  switch (mode) {
-    case 0:
-      spinner(100, 50);
-      break;
-
-    case 1:
-      spinner(220, 60);
-      break;
-
-    default:
-      FastLED.clear();
-      FastLED.show();
-      delay(500);
-      break;
-  }
+  spinner();
 #endif
 #if CANBUS
   readCanBus();
@@ -124,19 +117,31 @@ void bluetooth(bool on) {
   digitalWrite(BLUETOOTH_PIN1, on);
   digitalWrite(TRANSISTOR_PIN, on);
 }
+
+void nextTrack() {
+  pinMode(BT_NEXT, OUTPUT);
+  digitalWrite(BT_NEXT, LOW);
+  delay(50);
+  pinMode(BT_NEXT, INPUT);
+}
+
+void previousTrack() {
+  pinMode(BT_PREVIOUS, OUTPUT);
+  digitalWrite(BT_PREVIOUS, LOW);
+  delay(50);
+  pinMode(BT_PREVIOUS, INPUT);
+}
 /*
    Spinning LED animation with trailing tail
-   @param hue        - CHSV color
-   @param brightness - brightness of LED's
    i is static variable, so it is initialized only once and remembers its position after function exits
 */
-void spinner(uint8_t hue, uint8_t brightness) {
+void spinner() {
   static uint8_t i = 0;
   EVERY_N_MILLISECONDS(85) {
-    leds[i++] = CHSV(hue, 255, brightness);
+    leds[i++] = CHSV(hue, 255, BRIGHTNESS);
     i %= NUM_LEDS;
     FastLED.show();
-    fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
+    fadeToBlackBy(leds, NUM_LEDS, BRIGHTNESS / (NUM_LEDS / 4));
   }
 }
 /*
@@ -199,7 +204,7 @@ uint8_t getHighBit(uint8_t value) {
   if (!value) return 0xFF;
 
   for (uint8_t i = 0; i < 8; i++) {
-    if (value >> i & 0x01) {
+    if (value >> i & 1) {
       return i;
     }
   }
@@ -212,15 +217,14 @@ void audioActions(uint8_t action) {
       Serial.println("NEXT");
       break;
     case SEEK_DOWN:
-      //TODO change the track down
+      previousTrack();
       Serial.println("SEEK DOWN");
       break;
     case SEEK_UP:
-      //TODO change the track up
+      nextTrack();
       Serial.println("SEEK UP");
       break;
     case SRC:
-      //TODO
       bluetooth(!digitalRead(BLUETOOTH_PIN0));
       Serial.println("SRC");
       break;
