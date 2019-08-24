@@ -181,11 +181,11 @@ void gauge(uint16_t val, uint16_t maximum) {
 
 void ledSweep() {
   for (uint8_t i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CHSV(100 / NUM_LEDS * i, 255, 255);
+    leds[i] = CHSV(hue, 255, 255);
     FastLED.show();
     delay(40);
   }
-  for (uint8_t i = NUM_LEDS - 1; i >= 0; i--) {
+  for (uint8_t i = NUM_LEDS - 1; i > 0; i--) {
     leds[i] = CHSV(0, 0, 0);
     FastLED.show();
     delay(40);
