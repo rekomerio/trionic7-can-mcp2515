@@ -3,7 +3,7 @@
 ## So what does this do?
 
 When connected to a CAN bus of car with Trionic 7 engine management system, this sketch can be used to read and write data
-in to the I-bus or P-bus.
+in to the I-BUS or P-BUS.
 
 ### Required parts
  - Arduino Nano or similar microcontoller
@@ -26,6 +26,6 @@ To use the telephone mode, it is required to make custom AUX connection to your 
  - Text "NEXT TRACK" or "PREV TRACK" is shown on SID when changing the track 
  - LED animations
 
-CAN messages and protocols can be found [here.](pikkupossu.1g.fi/tomi/projects/i-bus/i-bus.html)
+CAN messages and protocols for T7 I-BUS can be found [here.](pikkupossu.1g.fi/tomi/projects/i-bus/i-bus.html)
 
 [![Saab interior](http://img.youtube.com/vi/0LvEN18u2Zs/0.jpg)](http://www.youtube.com/watch?v=0LvEN18u2Zs "Saab bluetooth")
