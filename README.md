@@ -1,17 +1,25 @@
-# Arduino Nano - Saab 9-5
+# Trionic 7 MCP2515 Communication
 
-I have a small Arduino Nano in my Saab that controls LED ring behind cigarette lighter and Bluetooth receiver for the radio.  
+### Required parts
+ - Arduino Nano or similar microcontoller
+ - MCP2515 CAN shield
+ - Bluetooth receiver of your choice
+ - Voltage stepdown converter
+ - 12 pixed WS2812 LED ring
 
-Arduino turns Bluetooth receiver on and also switches the radio to telephone mode.  
+### Current features:
+ - Read button presses from SID and steering wheel
+ - Write custom messages to SID
+ - Adjustment of LED brightness by the car light level sensor
+ - Turn on bluetooth from steering wheel SRC button
+ - Change tracks from steering wheel seek buttons
+ - Text "BLUETOOTH" is shown on SID when Bluetooth is on
+ - Text "NEXT TRACK" or "PREV TRACK" is shown on SID when changing the track 
 
 To use the telephone mode, it is required to make custom AUX connection to your radio.  
 
 [Link to DIY AUX tutorial](http://saabworld.net/showthread.php?t=28000)  
 
 The LED has 2 animations, one on startup and one running continuosly.  
-When switched to Bluetooth mode, the LED will turn from green to pink.
-
-**Currently under work is MCP2515 CAN integration to read the CAN data and use it to detect button presses and all sorts of cool 
-things.**
 
 [![Saab interior](http://img.youtube.com/vi/0LvEN18u2Zs/0.jpg)](http://www.youtube.com/watch?v=0LvEN18u2Zs "Saab bluetooth")
