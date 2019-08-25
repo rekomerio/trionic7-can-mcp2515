@@ -1,5 +1,6 @@
 /*
   By Reko Meriö
+  github.com/K9260
 */
 
 #include <mcp_can.h>
@@ -26,7 +27,19 @@
 
 /*** CAN addresses ***/
 #define IBUS_BUTTONS   0x290
+#define O_SID_MSG      0x33F
+#define O_SID_PRIORITY 0x358
+#define TEXT_PRIORITY  0x368
+#define LIGHTING       0x410
 #define ENGINE         0x460
+
+/*** ID's for nodes ***/
+#define SPA            0x12
+#define IHU            0x19
+#define TRIONIC        0x21
+#define ACC            0x23
+#define TWICE          0x2D
+#define OPEN_SID       0x32
 
 /*** CAN bytes ***/
 #define AUDIO          2
@@ -49,6 +62,12 @@
 #define SET            6
 #define CLR            7
 
+/*    LIGHTING  */
+#define DIMM1          1
+#define DIMM0          2
+#define LIGHT1         3
+#define LIGHT0         4
+
 /*    ENGINE    */
 #define RPM1           1
 #define RPM0           2
@@ -59,8 +78,15 @@
 #define I_BUS          CAN_47KBPS
 #define P_BUS          CAN_500KBPS
 
-#define MAX_RPM        6000
-#define MAX_SPD        240
+#define LIGHT_MAX      0x2C00
+#define LIGHT_MIN      0x1800
+#define DIMMER_MAX     0xFD00
+#define DIMMER_MIN     0x4600
+
+/*** SID message ***/
+#define MESSAGE_LENGTH 12
+#define LETTERS_IN_MSG 5
+
 #define NUM_LEDS       12
 
 MCP_CAN CAN(CAN_CS_PIN);
@@ -82,27 +108,31 @@ void setup() {
   CAN.setMode(MCP_NORMAL);
 #endif
 #if LED
-  ledSweep(); // Sweep all leds on and then off
+  startingEffect(2);
 #endif
 }
-
-uint8_t hue = 100;   // Green
+uint8_t priorities[3];
+uint8_t hue        = 100;   // Green
 uint8_t brightness = 50;
-uint8_t ledMode = 0;
+bool trackChanged  = false;
+bool bluetooth     = false;
 
 void loop() {
-  if (buttonPressed()) {
-    ++ledMode %= 3;
-  }
-
 #if LED
-  if (!ledMode) {
-    spinner();
-  }
+  spinner();
 #endif
 
 #if CANBUS
   readCanBus();
+  if (bluetooth) {
+    EVERY_N_MILLISECONDS(1000) {
+      if (trackChanged) {
+        trackChanged = false;
+      } else {
+        sendSidMessage("BLUETOOTH   ", 2);
+      }
+    }
+  }
 #endif
 }
 /*
@@ -122,29 +152,35 @@ bool buttonPressed() {
   lastState = buttonState;
   return false;
 }
+
 /*
    Turn bluetooth on or off
-   @param on - is bluetooth turned on (true) or off (false)
 */
-void bluetooth(bool on) {
-  digitalWrite(BLUETOOTH_PIN0, on);
-  digitalWrite(BLUETOOTH_PIN1, on);
-  digitalWrite(TRANSISTOR_PIN, on);
+void switchBluetooth() {
+  bluetooth = !bluetooth;
+  digitalWrite(BLUETOOTH_PIN0, bluetooth);
+  digitalWrite(BLUETOOTH_PIN1, bluetooth);
+  digitalWrite(TRANSISTOR_PIN, bluetooth);
 }
 
 void nextTrack() {
+  sendSidMessage("NEXT TRACK  ", 2);
   pinMode(BT_NEXT, OUTPUT);
   digitalWrite(BT_NEXT, LOW);
   delay(50);
   pinMode(BT_NEXT, INPUT);
+  trackChanged = true;
 }
 
 void previousTrack() {
+  sendSidMessage("PREV TRACK  ", 2);
   pinMode(BT_PREVIOUS, OUTPUT);
   digitalWrite(BT_PREVIOUS, LOW);
   delay(50);
   pinMode(BT_PREVIOUS, INPUT);
+  trackChanged = true;
 }
+
 /*
    Spinning LED animation with trailing tail
    i is static variable, so it is initialized only once and remembers its position after function exits
@@ -159,37 +195,23 @@ void spinner() {
   }
 }
 
-/* Visualizes given value with leds.
-  Color range is from green to red.
-  Green : 100
-  Red   : 0
+/*
+   Two spinning LED particles, one half a round further than the other
+   @param rounds - how many complete rounds to do
 */
-
-void gauge(uint16_t val, uint16_t maximum) {
-  val = map(val, 0, maximum, 0, NUM_LEDS);
-  FastLED.clear();
-  for (uint8_t i = 0; i < val; i++) {
-    leds[i] = CHSV(100 - i * (100 / NUM_LEDS), 255, brightness);
+void startingEffect(uint8_t rounds) {
+  for (uint16_t i = 0; i < NUM_LEDS * rounds; i++) {
+    uint16_t j = i + (NUM_LEDS / 2);
+    leds[i % NUM_LEDS] = CHSV(220, 255, 255);
+    leds[j % NUM_LEDS] = CHSV(180, 255, 255);
+    FastLED.show();
+    FastLED.clear();
+    delay(50);
   }
-  FastLED.show();
 }
 
-/*
-  Sweep through the LED ring, first by coloring leds one by one
-  and then clearing them again one by one.
-*/
-
-void ledSweep() {
-  for (uint8_t i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CHSV(hue, 255, 255);
-    FastLED.show();
-    delay(40);
-  }
-  for (uint8_t i = NUM_LEDS - 1; i > 0; i--) {
-    leds[i] = CHSV(0, 0, 0);
-    FastLED.show();
-    delay(40);
-  }
+uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum) {
+  return map(val, minimum, maximum, 40, 255);
 }
 
 typedef void (*Callback) (uint8_t);
@@ -224,25 +246,15 @@ void readCanBus() {
         action = getHighBit(data[SID]);
         runAction(action, sidActions);
         break;
+      case TEXT_PRIORITY:
+        setPriority(data[0], data[1]);
+        break;
+      case LIGHTING:
+        lightActions(data);
+        break;
       case ENGINE:
         engineActions(data);
         break;
-    }
-  }
-}
-
-/*
-  Checks every bit of the given value until finds the first high bit and then
-  returns the position of that; or if none are high, returns 0xFF (255).
-  @param value
-  @return - first high bit of the given value or 0xFF
-*/
-uint8_t getHighBit(const uint8_t value) {
-  if (!value) return 0xFF;
-
-  for (uint8_t i = 0; i < 8; i++) {
-    if (value >> i & 1) {
-      return i;
     }
   }
 }
@@ -262,7 +274,7 @@ void audioActions(const uint8_t action) {
       Serial.println("SEEK UP");
       break;
     case SRC:
-      bluetooth(!digitalRead(BLUETOOTH_PIN0));
+      switchBluetooth();
       Serial.println("SRC");
       break;
     case VOL_UP:
@@ -291,31 +303,129 @@ void sidActions(const uint8_t action) {
       Serial.println("DOWN");
       break;
     case SET:
-      brightness = constrain(brightness + 10, 10, 250);
+      //TODO
       Serial.println("SET");
       break;
     case CLR:
-      brightness = constrain(brightness - 10, 10, 250);
+      //TODO
       Serial.println("CLEAR");
       break;
   }
 }
-
+/*
+  Read value of manual dimmer and lightness sensor in SID.
+*/
+void lightActions(const uint8_t data[]) {
+  uint16_t dimmer = combineBytes(data[DIMM1], data[DIMM0]);
+  uint16_t lightingLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
+#if LED
+  brightness = scaleBrightness(lightingLevel, LIGHT_MIN, LIGHT_MAX);
+#endif
+}
+/*
+  Read rpm and vehicle speed (km/h).
+*/
 void engineActions(const uint8_t data[]) {
   uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
   uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
-#if LED
-  switch (ledMode) {
+  //TODO: add rpm warning
+}
+/*
+  Set current priority for all rows.
+  Priority informs which device is using the row.
+
+  Priority 0: Are both rows being used.
+  Priority 1: Is row one being used.
+  Priority 2: Is row two being used.
+
+  If priority is equal to 0xFF, row is not being used.
+*/
+void setPriority(uint8_t row, uint8_t priority) {
+  switch (row) {
+    case 0:
+      priorities[0] = priority;
+      break;
     case 1:
-      gauge(rpm, MAX_RPM);
-      Serial.println(rpm);
+      priorities[1] = priority;
       break;
     case 2:
-      gauge(spd, MAX_SPD);
-      Serial.println(spd);
+      priorities[2] = priority;
       break;
   }
-#endif
+}
+/*
+  Check priority for SID rows to see if it's wise to overwrite them.
+*/
+bool allowedToWrite(uint8_t row) {
+  if (priorities[0] != 0xFF || priorities[1] == OPEN_SID) {
+    return false;
+  }
+  switch (priorities[row]) {
+    case SPA:
+      return false;
+    case IHU:
+      return true;
+    case TRIONIC:
+      return false;
+    case ACC:
+      return false;
+    case TWICE:
+      return false;
+    case OPEN_SID:
+      return true;
+    default:
+      return true;
+  }
+}
+/*
+  Informs SID that a device is about to send a message, so other
+  devices in the bus will be informed of the current priority.
+*/
+void beginMessaging() {
+  uint8_t data[] = {0x21, 0x02, 0x03, 0x32, 0, 0, 0, 0};
+  CAN.sendMsgBuf(O_SID_PRIORITY, 0, 8, data);
+  delay(10);
+}
+
+void sendSidMessage(const char letters[MESSAGE_LENGTH], uint8_t row) {
+  if (allowedToWrite(row)) {
+    beginMessaging();
+    uint8_t message[8];
+    enum BYTE {ORDER, IDK, ROW, LETTER0, LETTER1, LETTER2, LETTER3, LETTER4};
+    message[ORDER]   = 0x42;           //Must be 0x42 on the first msg, when message length is equal to 12
+    message[IDK]     = 0x96;           //Unknown
+    message[ROW]     = row;
+    for (uint8_t i = 0; i < 3; i++) {  //3 messages need to be sent
+      if (i) {
+        message[ORDER] = 2 - i;        //2nd message: order is 1, 3rd message: order is 0
+      }
+      for (uint8_t j = 0; j < LETTERS_IN_MSG; j++) {
+        uint8_t letter = i * LETTERS_IN_MSG + j;
+        if (letters[letter] && letter < MESSAGE_LENGTH) {
+          message[LETTER0 + j] = letters[letter];
+        } else {
+          message[LETTER0 + j] = 0x00;
+        }
+      }
+      CAN.sendMsgBuf(O_SID_MSG , 0, 8, message);
+      delay(10);
+    }
+  }
+}
+/*
+  Checks every bit of the given value until finds the first high bit and then
+  returns the position of that; or if none are high, returns 0xFF (255).
+  @param value
+  @return - first high bit of the given value or 0xFF
+*/
+uint8_t getHighBit(const uint8_t value) {
+  if (!value) return 0xFF;
+
+  for (uint8_t i = 0; i < 8; i++) {
+    if (value >> i & 1) {
+      return i;
+    }
+  }
 }
 
 uint16_t combineBytes(uint8_t _byte1, uint8_t _byte2) {
