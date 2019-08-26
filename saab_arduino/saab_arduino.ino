@@ -27,15 +27,17 @@
 
 /*** CAN addresses ***/
 #define IBUS_BUTTONS   0x290
+#define RADIO_MSG      0x328
+#define RADIO_PRIORITY 0x348
 #define O_SID_MSG      0x33F
 #define O_SID_PRIORITY 0x358
 #define TEXT_PRIORITY  0x368
 #define LIGHTING       0x410
 #define ENGINE         0x460
 
-/*** ID's for nodes ***/
+/*** ID's for devices talking to SID ***/
 #define SPA            0x12
-#define IHU            0x19
+#define RADIO          0x19
 #define TRIONIC        0x21
 #define ACC            0x23
 #define TWICE          0x2D
@@ -84,10 +86,10 @@
 #define DIMMER_MIN     0x4600
 
 /*** SID message ***/
-#define MESSAGE_LENGTH 12
-#define LETTERS_IN_MSG 5
+#define MESSAGE_LENGTH   12
+#define LETTERS_IN_MSG   5
 
-#define NUM_LEDS       12
+#define NUM_LEDS         12
 
 MCP_CAN CAN(CAN_CS_PIN);
 CRGB leds[NUM_LEDS];
@@ -114,7 +116,7 @@ void setup() {
 uint8_t priorities[3];
 uint8_t hue        = 100;   // Green
 uint8_t brightness = 50;
-bool trackChanged  = false;
+
 bool bluetooth     = false;
 
 void loop() {
@@ -124,15 +126,6 @@ void loop() {
 
 #if CANBUS
   readCanBus();
-  if (bluetooth) {
-    EVERY_N_MILLISECONDS(1000) {
-      if (trackChanged) {
-        trackChanged = false;
-      } else {
-        sendSidMessage("BLUETOOTH   ", 2);
-      }
-    }
-  }
 #endif
 }
 /*
@@ -164,23 +157,20 @@ void switchBluetooth() {
 }
 
 void nextTrack() {
-  sendSidMessage("NEXT TRACK  ", 2);
+  sendSidMessage("NEXT TRACK  ");
   pinMode(BT_NEXT, OUTPUT);
   digitalWrite(BT_NEXT, LOW);
-  delay(50);
+  delay(70);
   pinMode(BT_NEXT, INPUT);
-  trackChanged = true;
 }
 
 void previousTrack() {
-  sendSidMessage("PREV TRACK  ", 2);
+  sendSidMessage("PREV TRACK  ");
   pinMode(BT_PREVIOUS, OUTPUT);
   digitalWrite(BT_PREVIOUS, LOW);
-  delay(50);
+  delay(70);
   pinMode(BT_PREVIOUS, INPUT);
-  trackChanged = true;
 }
-
 /*
    Spinning LED animation with trailing tail
    i is static variable, so it is initialized only once and remembers its position after function exits
@@ -194,7 +184,6 @@ void spinner() {
     fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
   }
 }
-
 /*
    Two spinning LED particles, one half a round further than the other
    @param rounds - how many complete rounds to do
@@ -209,9 +198,12 @@ void startingEffect(uint8_t rounds) {
     delay(50);
   }
 }
+/*
+  Scale brightness coming from sensor for LED ring to use.
+*/
 
-uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum) {
-  return map(val, minimum, maximum, 40, 255);
+uint16_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum) {
+  return map(val, minimum, maximum, 40, 200);
 }
 
 typedef void (*Callback) (uint8_t);
@@ -266,11 +258,15 @@ void audioActions(const uint8_t action) {
       Serial.println("NEXT");
       break;
     case SEEK_DOWN:
-      previousTrack();
+      if (bluetooth) {
+        previousTrack();
+      }
       Serial.println("SEEK DOWN");
       break;
     case SEEK_UP:
-      nextTrack();
+      if (bluetooth) {
+        nextTrack();
+      }
       Serial.println("SEEK UP");
       break;
     case SRC:
@@ -331,7 +327,7 @@ void engineActions(const uint8_t data[]) {
   //TODO: add rpm warning
 }
 /*
-  Set current priority for all rows.
+  Set current priority for all SID rows.
   Priority informs which device is using the row.
 
   Priority 0: Are both rows being used.
@@ -355,47 +351,40 @@ void setPriority(uint8_t row, uint8_t priority) {
 }
 /*
   Check priority for SID rows to see if it's wise to overwrite them.
+  If both rows are used, write is not allowed.
+  If priority for requested row is equal or smaller than your device id, write is allowed.
 */
-bool allowedToWrite(uint8_t row) {
-  if (priorities[0] != 0xFF || priorities[1] == OPEN_SID) {
-    return false;
-  }
-  switch (priorities[row]) {
-    case SPA:
-      return false;
-    case IHU:
-      return true;
-    case TRIONIC:
-      return false;
-    case ACC:
-      return false;
-    case TWICE:
-      return false;
-    case OPEN_SID:
-      return true;
-    default:
-      return true;
-  }
+bool allowedToWrite(uint8_t row, uint8_t writeAs) {
+  if (priorities[0] != 0xFF)       return false;
+  if (priorities[row] <= writeAs)  return true;
 }
 /*
-  Informs SID that a device is about to send a message, so other
-  devices in the bus will be informed of the current priority.
+  Request SID to not display message from radio on row 2.
 */
-void beginMessaging() {
-  uint8_t data[] = {0x21, 0x02, 0x03, 0x32, 0, 0, 0, 0};
-  CAN.sendMsgBuf(O_SID_PRIORITY, 0, 8, data);
-  delay(10);
+void doNotDisplay() {
+  uint8_t data[] = {0x11, 0x02, 0xFF, RADIO, 0, 0, 0, 0};
+  CAN.sendMsgBuf(RADIO_PRIORITY, 0, 8, data);
 }
-
-void sendSidMessage(const char letters[MESSAGE_LENGTH], uint8_t row) {
-  if (allowedToWrite(row)) {
-    beginMessaging();
+/*
+  Request write to SID row 2 as OPEN SID
+*/
+void requestWrite() {
+  uint8_t data[] = {0x21, 0x02, 0x03, OPEN_SID, 0, 0, 0, 0};
+  CAN.sendMsgBuf(O_SID_PRIORITY, 0, 8, data);
+}
+/*
+    Message is sent to address that OPEN SID uses for writing to SID, as it has the highest priority.
+    Message length needs to be 12 characters, so if your message is not that long, simply add spaces to fill it up,
+    or otherwise there will be some trash written on the SID.
+*/
+void sendSidMessage(const char letters[MESSAGE_LENGTH]) {
+  if (allowedToWrite(2, RADIO)) { //Check if it's ok to write as RADIO to row 2.
     uint8_t message[8];
     enum BYTE {ORDER, IDK, ROW, LETTER0, LETTER1, LETTER2, LETTER3, LETTER4};
-    message[ORDER]   = 0x42;           //Must be 0x42 on the first msg, when message length is equal to 12
-    message[IDK]     = 0x96;           //Unknown
-    message[ROW]     = row;
-    for (uint8_t i = 0; i < 3; i++) {  //3 messages need to be sent
+    message[ORDER]   = 0x42; //Must be 0x42 on the first msg, when message length is equal to 12
+    message[IDK]     = 0x96;           //Unknown, potentially SID id?
+    message[ROW]     = 0x02;           //Row 2
+    for (uint8_t i = 0; i < 3; i++) {  //Group of 3 messages need to be sent
       if (i) {
         message[ORDER] = 2 - i;        //2nd message: order is 1, 3rd message: order is 0
       }
@@ -407,7 +396,7 @@ void sendSidMessage(const char letters[MESSAGE_LENGTH], uint8_t row) {
           message[LETTER0 + j] = 0x00;
         }
       }
-      CAN.sendMsgBuf(O_SID_MSG , 0, 8, message);
+      CAN.sendMsgBuf(RADIO_MSG , 0, 8, message);
       delay(10);
     }
   }
