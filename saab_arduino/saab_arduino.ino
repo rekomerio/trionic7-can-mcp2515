@@ -1,6 +1,6 @@
 /*
   By Reko Meriö
-  github.com/K9260
+  github.com/rekomerio
 */
 
 #include <mcp_can.h>
