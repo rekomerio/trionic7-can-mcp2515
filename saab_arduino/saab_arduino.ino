@@ -90,10 +90,8 @@
 #define DIMMER_MIN     0x423F
 
 /*** SID message ***/
-#define MESSAGE_LENGTH 12
-#define LETTERS_IN_MSG 5
-
-#define NUM_LEDS       12
+#define MESSAGE_LENGTH   12
+#define LETTERS_IN_MSG   5
 
 /*** LED ***/
 #define HUE_GREEN        100
