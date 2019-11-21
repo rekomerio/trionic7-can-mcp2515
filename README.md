@@ -31,7 +31,7 @@ To use the telephone mode, it is required to make custom AUX connection to your 
 ## Notes:
 
 - It seems that light level sensor is not the same in all SID's so you might need to change DIMMER_MAX and DIMMER_MIN.
-  Minimum value for dimmer can be found by logging the dimmer value while holding finger over the sensor and maximum by shining flaslight to it.
+  Minimum value for dimmer can be found by logging the dimmer value while holding finger over the sensor and maximum by shining flashlight to it.
 
 CAN messages and protocols for T7 I-BUS can be found [here.](http://pikkupossu.1g.fi/tomi/projects/i-bus/i-bus.html)
 
