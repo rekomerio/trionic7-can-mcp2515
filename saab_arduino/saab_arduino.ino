@@ -1,6 +1,6 @@
 /*
   By Reko Meriö
-  github.com/K9260
+  github.com/rekomerio
 */
 
 #include <mcp_can.h>
@@ -22,7 +22,7 @@
 #define BT_NEXT        5
 #define TRANSISTOR_PIN 7  // Turns on radio telephone channel
 #define BLUETOOTH_PIN0 8  // Turns on bluetooth module
-#define BLUETOOTH_PIN1 9
+#define BLUETOOTH_PIN1 9  // Bluetooth shares power from 2 pins
 #define CAN_CS_PIN     10
 
 /*** CAN addresses ***/
@@ -88,11 +88,14 @@
 #define LIGHT_MIN      0x2308
 #define DIMMER_MAX     0xFE9D
 #define DIMMER_MIN     0x423F
-#define RPM_MAX        5000
 
 /*** SID message ***/
 #define MESSAGE_LENGTH   12
 #define LETTERS_IN_MSG   5
+
+/*** LED ***/
+#define HUE_GREEN        100
+#define HUE_RED          0
 
 #define NUM_LEDS         12
 
@@ -119,19 +122,14 @@ void setup() {
 #endif
 }
 uint8_t priorities[3];
-uint8_t hue        = 100;   // Green
+uint8_t hue = HUE_GREEN;
 uint8_t brightness = 50;
 
-bool bluetooth     = false;
-bool rpm_warning   = false;
+bool bluetooth = false;
 
 void loop() {
 #if LED
-  if (rpm_warning) {
-    ledBlink();
-  } else {
-    spinner();
-  }
+  spinner();
 #endif
 
 #if CANBUS
@@ -155,7 +153,6 @@ bool buttonPressed() {
   lastState = buttonState;
   return false;
 }
-
 /*
    Turn bluetooth on or off
 */
@@ -182,23 +179,13 @@ void previousTrack() {
   pinMode(BT_PREVIOUS, INPUT);
 }
 /*
-  Blink LED on and off with red color.
-*/
-void ledBlink() {
-  EVERY_N_MILLISECONDS(85) {
-    brightness = brightness < 255 ? 255 : 0;
-    fill_solid(leds, NUM_LEDS, CRGB(brightness, 0, 0));
-    FastLED.show();
-  }
-}
-/*
    Spinning LED animation with trailing tail
    i is static variable, so it is initialized only once and remembers its position after function exits
 */
 void spinner() {
   static uint8_t i = 0;
   EVERY_N_MILLISECONDS(85) {
-    leds[i++] = CHSV(hue, 255, brightness);
+    leds[i++] = CHSV(hue, 255, 255);
     i %= NUM_LEDS;
     FastLED.show();
     fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
@@ -222,7 +209,13 @@ void startingEffect(uint8_t rounds) {
   Scale brightness coming from sensor for LED ring to use.
 */
 uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum) {
-  return map(val, minimum, maximum, 40, 200);
+  return map(val, minimum, maximum, 40, 255);
+}
+/*
+  Scale hue from green to red for LED ring.
+*/
+uint8_t scaleHue(uint16_t val, uint16_t minimum, uint16_t maximum) {
+  return map(val, minimum, maximum, HUE_GREEN, HUE_RED);
 }
 
 typedef void (*Callback) (uint8_t);
@@ -273,7 +266,6 @@ void readCanBus() {
 void audioActions(const uint8_t action) {
   switch (action) {
     case NXT:
-      //TODO
       Serial.println("NEXT");
       break;
     case SEEK_DOWN:
@@ -293,11 +285,9 @@ void audioActions(const uint8_t action) {
       Serial.println("SRC");
       break;
     case VOL_UP:
-      //TODO
       Serial.println("VOL+");
       break;
     case VOL_DOWN:
-      //TODO
       Serial.println("VOL-");
       break;
   }
@@ -306,23 +296,18 @@ void audioActions(const uint8_t action) {
 void sidActions(const uint8_t action) {
   switch (action) {
     case NPANEL:
-      //TODO
       Serial.println("NIGHT PANEL");
       break;
     case UP:
-      //TODO
       Serial.println("UP");
       break;
     case DOWN:
-      //TODO
       Serial.println("DOWN");
       break;
     case SET:
-      //TODO
       Serial.println("SET");
       break;
     case CLR:
-      //TODO
       Serial.println("CLEAR");
       break;
   }
@@ -333,9 +318,9 @@ void sidActions(const uint8_t action) {
 void lightActions(const uint8_t data[]) {
   uint16_t dimmer = combineBytes(data[DIMM1], data[DIMM0]);
   uint16_t lightLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
-#if LED
+
   brightness = scaleBrightness(lightLevel, LIGHT_MIN, LIGHT_MAX);
-#endif
+  FastLED.setBrightness(brightness);
 }
 /*
   Read rpm and vehicle speed (km/h).
@@ -343,12 +328,8 @@ void lightActions(const uint8_t data[]) {
 void engineActions(const uint8_t data[]) {
   uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
   uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
-  if (rpm > RPM_MAX && !rpm_warning) {
-    rpm_warning = true;
-  }
-  if (rpm < RPM_MAX && rpm_warning) {
-    rpm_warning = false;
-  }
+  // If rpm is less than 3000, color is green, otherwise scale it from green to red as the rpm gets higher.
+  hue = rpm < 3000 ? HUE_GREEN : scaleHue(rpm, 3000, 6000);
 }
 /*
   Set current priority for all SID rows.
@@ -376,11 +357,11 @@ void setPriority(uint8_t row, uint8_t priority) {
 /*
   Check priority for SID rows to see if it's wise to overwrite them.
   If both rows are used, write is not allowed.
-  If priority for requested row is equal or smaller than your device id, write is allowed.
+  If priority for requested row is equal to your device id, write is allowed.
 */
 bool allowedToWrite(uint8_t row, uint8_t writeAs) {
-  if (priorities[0] != 0xFF)       return false;
-  if (priorities[row] <= writeAs)  return true;
+  if (priorities[0] != 0xFF)      return false;
+  if (priorities[row] == writeAs) return true;
 }
 /*
   Request SID to not display message from radio on row 2.
@@ -402,15 +383,15 @@ void requestWrite() {
     or otherwise there will be some trash written on the SID.
 */
 void sendSidMessage(const char letters[MESSAGE_LENGTH]) {
-  if (allowedToWrite(2, RADIO)) { //Check if it's ok to write as RADIO to row 2.
+  if (allowedToWrite(2, RADIO)) {      // Check if it's ok to write as RADIO to row 2.
     uint8_t message[8];
     enum BYTE {ORDER, IDK, ROW, LETTER0, LETTER1, LETTER2, LETTER3, LETTER4};
-    message[ORDER]   = 0x42; //Must be 0x42 on the first msg, when message length is equal to 12
-    message[IDK]     = 0x96;           //Unknown, potentially SID id?
-    message[ROW]     = 0x02;           //Row 2
-    for (uint8_t i = 0; i < 3; i++) {  //Group of 3 messages need to be sent
-      if (i) {
-        message[ORDER] = 2 - i;        //2nd message: order is 1, 3rd message: order is 0
+    message[ORDER] = 0x42;             // Must be 0x42 on the first msg, when message length is equal to 12
+    message[IDK]   = 0x96;             // Unknown, potentially SID id?
+    message[ROW]   = 0x02;             // Row 2
+    for (uint8_t i = 0; i < 3; i++) {  // Group of 3 messages need to be sent
+      if (i > 0) {
+        message[ORDER] = 2 - i;        // 2nd message: order is 1, 3rd message: order is 0
       }
       for (uint8_t j = 0; j < LETTERS_IN_MSG; j++) {
         uint8_t letter = i * LETTERS_IN_MSG + j;
