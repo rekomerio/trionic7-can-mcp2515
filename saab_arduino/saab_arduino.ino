@@ -104,6 +104,12 @@
 MCP_CAN CAN(CAN_CS_PIN);
 CRGB leds[NUM_LEDS];
 
+uint8_t priorities[3];
+uint8_t hue = HUE_GREEN;
+uint8_t brightness = 50;
+
+bool bluetooth = false;
+
 void setup() {
 #if DEBUG
   Serial.begin(115200);
@@ -123,19 +129,10 @@ void setup() {
   startingEffect(2);
 #endif
 }
-uint8_t priorities[3];
-uint8_t hue = HUE_GREEN;
-uint8_t brightness = 50;
-
-bool bluetooth = false;
 
 void loop() {
 #if LED
-  if (rpm_warning) {
-    ledBlink();
-  } else {
-    spinner();
-  }
+  spinner();
 #endif
 
 #if CANBUS
@@ -183,16 +180,6 @@ void previousTrack() {
   digitalWrite(BT_PREVIOUS, LOW);
   delay(70);
   pinMode(BT_PREVIOUS, INPUT);
-}
-/*
-  Blink LED on and off with red color.
-*/
-void ledBlink() {
-  EVERY_N_MILLISECONDS(85) {
-    brightness = brightness < 255 ? 255 : 0;
-    fill_solid(leds, NUM_LEDS, CRGB(brightness, 0, 0));
-    FastLED.show();
-  }
 }
 /*
    Spinning LED animation with trailing tail
