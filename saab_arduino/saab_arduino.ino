@@ -186,7 +186,7 @@ void previousTrack() {
 void spinner() {
   static uint8_t i = 0;
   EVERY_N_MILLISECONDS(85) {
-    leds[i++] = CHSV(hue, 255, 255);
+    leds[i++] = CHSV(hue, 255, brightness);
     i %= NUM_LEDS;
     FastLED.show();
     fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
@@ -321,7 +321,6 @@ void lightActions(const uint8_t data[]) {
   uint16_t lightLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
 
   brightness = scaleBrightness(lightLevel, LIGHT_MIN, LIGHT_MAX);
-  FastLED.setBrightness(brightness);
 }
 /*
   Read rpm and vehicle speed (km/h).
