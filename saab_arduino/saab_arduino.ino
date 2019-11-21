@@ -7,7 +7,7 @@
 #include <FastLED.h>
 
 #if defined(FASTLED_VERSION) && (FASTLED_VERSION < 3001000)
-#warning "Requires FastLED 3.1 or later; check github for latest code."
+#MAX "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 
 /*** ENABLE FUNCTIONALITIES ***/
@@ -80,10 +80,15 @@
 #define I_BUS          CAN_47KBPS
 #define P_BUS          CAN_500KBPS
 
-#define LIGHT_MAX      0x2C00
-#define LIGHT_MIN      0x1800
-#define DIMMER_MAX     0xFD00
-#define DIMMER_MIN     0x4600
+/*
+   Range for light level sensor depends on SID version.
+   Dimmer values might also vary.
+*/
+#define LIGHT_MAX      0xC7FB
+#define LIGHT_MIN      0x2308
+#define DIMMER_MAX     0xFE9D
+#define DIMMER_MIN     0x423F
+#define RPM_MAX        5000
 
 /*** SID message ***/
 #define MESSAGE_LENGTH   12
@@ -118,10 +123,15 @@ uint8_t hue        = 100;   // Green
 uint8_t brightness = 50;
 
 bool bluetooth     = false;
+bool rpm_warning   = false;
 
 void loop() {
 #if LED
-  spinner();
+  if (rpm_warning) {
+    ledBlink();
+  } else {
+    spinner();
+  }
 #endif
 
 #if CANBUS
@@ -172,6 +182,16 @@ void previousTrack() {
   pinMode(BT_PREVIOUS, INPUT);
 }
 /*
+  Blink LED on and off with red color.
+*/
+void ledBlink() {
+  EVERY_N_MILLISECONDS(85) {
+    brightness = brightness < 255 ? 255 : 0;
+    fill_solid(leds, NUM_LEDS, CRGB(brightness, 0, 0));
+    FastLED.show();
+  }
+}
+/*
    Spinning LED animation with trailing tail
    i is static variable, so it is initialized only once and remembers its position after function exits
 */
@@ -201,8 +221,7 @@ void startingEffect(uint8_t rounds) {
 /*
   Scale brightness coming from sensor for LED ring to use.
 */
-
-uint16_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum) {
+uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum) {
   return map(val, minimum, maximum, 40, 200);
 }
 
@@ -309,13 +328,13 @@ void sidActions(const uint8_t action) {
   }
 }
 /*
-  Read value of manual dimmer and lightness sensor in SID.
+  Read value of manual dimmer and light level sensor in SID.
 */
 void lightActions(const uint8_t data[]) {
   uint16_t dimmer = combineBytes(data[DIMM1], data[DIMM0]);
-  uint16_t lightingLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
+  uint16_t lightLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
 #if LED
-  brightness = scaleBrightness(lightingLevel, LIGHT_MIN, LIGHT_MAX);
+  brightness = scaleBrightness(lightLevel, LIGHT_MIN, LIGHT_MAX);
 #endif
 }
 /*
@@ -324,7 +343,12 @@ void lightActions(const uint8_t data[]) {
 void engineActions(const uint8_t data[]) {
   uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
   uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
-  //TODO: add rpm warning
+  if (rpm > RPM_MAX && !rpm_warning) {
+    rpm_warning = true;
+  }
+  if (rpm < RPM_MAX && rpm_warning) {
+    rpm_warning = false;
+  }
 }
 /*
   Set current priority for all SID rows.
@@ -373,7 +397,7 @@ void requestWrite() {
   CAN.sendMsgBuf(O_SID_PRIORITY, 0, 8, data);
 }
 /*
-    Message is sent to address that OPEN SID uses for writing to SID, as it has the highest priority.
+    Message is sent to address that radio uses for writing to SID.
     Message length needs to be 12 characters, so if your message is not that long, simply add spaces to fill it up,
     or otherwise there will be some trash written on the SID.
 */
