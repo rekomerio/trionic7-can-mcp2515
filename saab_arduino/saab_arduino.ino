@@ -13,7 +13,7 @@
 /*** ENABLE FUNCTIONALITIES ***/
 #define LED            1
 #define CANBUS         1
-#define DEBUG          1
+#define DEBUG          0
 
 /*** DATA PINS ***/
 #define BUTTON_PIN     2
@@ -90,8 +90,10 @@
 #define DIMMER_MIN     0x423F
 
 /*** SID message ***/
-#define MESSAGE_LENGTH   12
-#define LETTERS_IN_MSG   5
+#define MESSAGE_LENGTH 12
+#define LETTERS_IN_MSG 5
+
+#define NUM_LEDS       12
 
 /*** LED ***/
 #define HUE_GREEN        100
@@ -129,7 +131,11 @@ bool bluetooth = false;
 
 void loop() {
 #if LED
-  spinner();
+  if (rpm_warning) {
+    ledBlink();
+  } else {
+    spinner();
+  }
 #endif
 
 #if CANBUS
@@ -177,6 +183,16 @@ void previousTrack() {
   digitalWrite(BT_PREVIOUS, LOW);
   delay(70);
   pinMode(BT_PREVIOUS, INPUT);
+}
+/*
+  Blink LED on and off with red color.
+*/
+void ledBlink() {
+  EVERY_N_MILLISECONDS(85) {
+    brightness = brightness < 255 ? 255 : 0;
+    fill_solid(leds, NUM_LEDS, CRGB(brightness, 0, 0));
+    FastLED.show();
+  }
 }
 /*
    Spinning LED animation with trailing tail
