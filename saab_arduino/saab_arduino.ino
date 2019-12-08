@@ -104,7 +104,6 @@ CRGB leds[NUM_LEDS];
 
 uint8_t priorities[3];
 uint8_t hue = HUE_GREEN;
-uint8_t brightness = 50;
 
 bool bluetooth = false;
 
@@ -186,10 +185,10 @@ void previousTrack() {
 void spinner() {
   static uint8_t i = 0;
   EVERY_N_MILLISECONDS(85) {
-    leds[i++] = CHSV(hue, 255, brightness);
+    leds[i++] = CHSV(hue, 255, 255);
     i %= NUM_LEDS;
     FastLED.show();
-    fadeToBlackBy(leds, NUM_LEDS, brightness / (NUM_LEDS / 4));
+    fadeToBlackBy(leds, NUM_LEDS, 85);
   }
 }
 /*
@@ -320,7 +319,8 @@ void lightActions(const uint8_t data[]) {
   uint16_t dimmer = combineBytes(data[DIMM1], data[DIMM0]);
   uint16_t lightLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
 
-  brightness = scaleBrightness(lightLevel, LIGHT_MIN, LIGHT_MAX);
+  uint8_t brightness = scaleBrightness(lightLevel, LIGHT_MIN, LIGHT_MAX);
+  FastLED.setBrightness(brightness);
 }
 /*
   Read rpm and vehicle speed (km/h).
@@ -328,8 +328,8 @@ void lightActions(const uint8_t data[]) {
 void engineActions(const uint8_t data[]) {
   uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
   uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
-  // If rpm is less than 3000, color is green, otherwise scale it from green to red as the rpm gets higher.
-  hue = rpm < 3000 ? HUE_GREEN : scaleHue(rpm, 3000, 6000);
+  // If rpm is less than 2500, color is green, otherwise scale it from green to red as the rpm gets higher.
+  hue = rpm < 2500 ? HUE_GREEN : scaleHue(rpm, 2500, 6000);
 }
 /*
   Set current priority for all SID rows.
@@ -362,6 +362,7 @@ void setPriority(uint8_t row, uint8_t priority) {
 bool allowedToWrite(uint8_t row, uint8_t writeAs) {
   if (priorities[0] != 0xFF)      return false;
   if (priorities[row] == writeAs) return true;
+  return false;
 }
 /*
   Request SID to not display message from radio on row 2.
