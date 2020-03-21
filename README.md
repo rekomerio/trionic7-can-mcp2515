@@ -25,7 +25,8 @@ To use the telephone mode, it is required to make custom AUX connection to your 
 - Turn on bluetooth from steering wheel SRC button
 - Change tracks from steering wheel seek buttons
 - Text "NEXT TRACK" or "PREV TRACK" is shown on SID when changing the track
-- Scale LED color by engine RPM
+- Adjust LED hue from SID buttons
+- Turn LED on and off according to the night panel
 - LED animations
 
 ## Notes:
