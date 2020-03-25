@@ -17,9 +17,10 @@
 
 /*** DATA PINS ***/
 #define BUTTON_PIN 		2
-#define LED_PIN 		3
+#define LED_RING_PIN 	3
 #define BT_PREVIOUS 	4
 #define BT_NEXT 		5
+#define LED_STRIP_PIN	6
 #define TRANSISTOR_PIN 	7 // Turns on radio telephone channel
 #define BLUETOOTH_PIN0 	8 // Turns on bluetoothState module
 #define BLUETOOTH_PIN1 	9 // Bluetooth shares power from 2 pins
@@ -96,10 +97,12 @@
 /*** LED ***/
 #define HUE_GREEN 100
 
-#define NUM_LEDS 12
+#define NUM_LEDS_RING 12
+#define NUM_LEDS_STRIP 9
 
 MCP_CAN CAN(CAN_CS_PIN);
-CRGB leds[NUM_LEDS];
+CRGB ledsOfRing[NUM_LEDS_RING];
+CRGB ledsOfStrip[NUM_LEDS_STRIP];
 
 uint8_t priorities[3];
 uint8_t activeMode;
@@ -118,7 +121,8 @@ void setup()
 #if DEBUG
 	Serial.begin(115200);
 #endif
-	FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
+	FastLED.addLeds<NEOPIXEL, LED_RING_PIN>(ledsOfRing, NUM_LEDS_RING);
+	FastLED.addLeds<NEOPIXEL, LED_STRIP_PIN>(ledsOfStrip, NUM_LEDS_STRIP);
 	pinMode(BUTTON_PIN, INPUT);
 	pinMode(BLUETOOTH_PIN0, OUTPUT);
 	pinMode(BLUETOOTH_PIN1, OUTPUT);
@@ -131,6 +135,7 @@ void setup()
 	CAN.setMode(MCP_NORMAL);
 #endif
 #if LED
+	fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, 255));
 	startingEffect(1);
 #endif
 }
@@ -195,17 +200,16 @@ void previousTrack()
 }
 /*
    Spinning LED animation with trailing tail
-   i is static variable, so it is initialized only once and remembers its position after function exits
 */
 void spinner()
 {
 	static uint8_t i = 0;
 	EVERY_N_MILLISECONDS(85)
 	{
-		leds[i++] = CHSV(hue, 255, 255);
-		i %= NUM_LEDS;
+		ledsOfRing[i++] = CHSV(hue, 255, 255);
+		i %= NUM_LEDS_RING;
 		FastLED.show();
-		fadeToBlackBy(leds, NUM_LEDS, 85);
+		fadeToBlackBy(ledsOfRing, NUM_LEDS_RING, 85);
 	}
 }
 /*
@@ -214,13 +218,14 @@ void spinner()
 */
 void startingEffect(uint8_t rounds)
 {
-	for (uint16_t i = 0; i < NUM_LEDS * rounds; i++)
+	for (uint16_t i = 0; i < NUM_LEDS_RING * rounds; i++)
 	{
-		uint16_t j = i + (NUM_LEDS / 2);
-		leds[i % NUM_LEDS] = CHSV(220, 255, 255);
-		leds[j % NUM_LEDS] = CHSV(180, 255, 255);
+		uint16_t j = i + (NUM_LEDS_RING / 2);
+		ledsOfRing[i % NUM_LEDS_RING] = CHSV(220, 255, 255);
+		ledsOfRing[j % NUM_LEDS_RING] = CHSV(180, 255, 255);
 		FastLED.show();
-		FastLED.clear();
+		ledsOfRing[i % NUM_LEDS_RING] = CRGB::Black;
+		ledsOfRing[j % NUM_LEDS_RING] = CRGB::Black;
 		delay(50);
 	}
 }
@@ -229,7 +234,7 @@ void startingEffect(uint8_t rounds)
 */
 uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum)
 {
-	return map(val, minimum, maximum, 25, 255);
+	return map(val, minimum, maximum, 20, 255);
 }
 /*
   Scale hue from green to red for LED ring.
@@ -319,6 +324,7 @@ void sidActions(const uint8_t action)
 		if (activeMode)
 		{
 			hue += 20;
+			fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, 255));
 		}
 		Serial.println("UP");
 		break;
@@ -326,6 +332,7 @@ void sidActions(const uint8_t action)
 		if (activeMode)
 		{
 			hue -= 20;
+			fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, 255));
 		}
 		Serial.println("DOWN");
 		break;
@@ -362,7 +369,7 @@ void engineActions(const uint8_t data[])
   Set current priority for all SID rows.
   Priority informs which device is using the row.
 
-  Priority 0: Are both rows being used.
+  Priority 0: Are both rows being used by one device.
   Priority 1: Is row one being used.
   Priority 2: Is row two being used.
 
