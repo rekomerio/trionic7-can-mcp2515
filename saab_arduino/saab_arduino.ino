@@ -101,12 +101,13 @@
 #define NUM_LEDS_STRIP 9
 
 MCP_CAN CAN(CAN_CS_PIN);
+
 CRGB ledsOfRing[NUM_LEDS_RING];
 CRGB ledsOfStrip[NUM_LEDS_STRIP];
 
-uint8_t priorities[3];
-uint8_t activeMode;
 uint8_t hue;
+uint8_t activeMode;
+uint8_t priorities[3];
 
 bool isBluetoothEnabled;
 bool isNightPanelEnabled;
@@ -117,7 +118,6 @@ void setup()
 	activeMode = 0;
 	isBluetoothEnabled = false;
 	isNightPanelEnabled = false;
-
 #if DEBUG
 	Serial.begin(115200);
 #endif
@@ -135,8 +135,7 @@ void setup()
 	CAN.setMode(MCP_NORMAL);
 #endif
 #if LED
-	fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, 255));
-	startingEffect(1);
+	ledBegin();
 #endif
 }
 
@@ -145,30 +144,9 @@ void loop()
 #if LED
 	spinner();
 #endif
-
 #if CANBUS
 	readCanBus();
 #endif
-}
-/*
-    Saves the previous state of button in bool lastState.
-    Returns true only once when button is being pressed. Returns true again
-    after button has been released and then pressed again.
-    Interrupt could be used here, but the button I have sometimes reads
-    false clicks.
-*/
-bool isButtonPressed()
-{
-	static uint8_t lastState = 0;
-	uint8_t buttonState = digitalRead(BUTTON_PIN);
-
-	if (buttonState && lastState != buttonState)
-	{
-		lastState = buttonState;
-		return true;
-	}
-	lastState = buttonState;
-	return false;
 }
 /*
    Turn bluetooth on or off
@@ -199,6 +177,24 @@ void previousTrack()
 	pinMode(BT_PREVIOUS, INPUT);
 }
 /*
+	Animate LED's on startup
+*/
+void ledBegin()
+{
+	constexpr float fRatio = (float)NUM_LEDS_STRIP / (float)NUM_LEDS_RING;
+	for (uint8_t i = 0; i < NUM_LEDS_RING; i++)
+	{
+		uint8_t j = i + (NUM_LEDS_RING / 2);
+		ledsOfRing[i % NUM_LEDS_RING] = CHSV(220, 255, 255);
+		ledsOfRing[j % NUM_LEDS_RING] = CHSV(180, 255, 255);
+		ledsOfStrip[(uint8_t)(i * fRatio)] = CHSV(hue, 255, 160);
+		FastLED.show();
+		ledsOfRing[i % NUM_LEDS_RING] = CRGB::Black;
+		ledsOfRing[j % NUM_LEDS_RING] = CRGB::Black;
+		delay(50);
+	}
+}
+/*
    Spinning LED animation with trailing tail
 */
 void spinner()
@@ -210,23 +206,6 @@ void spinner()
 		i %= NUM_LEDS_RING;
 		FastLED.show();
 		fadeToBlackBy(ledsOfRing, NUM_LEDS_RING, 85);
-	}
-}
-/*
-   Two spinning LED particles, one half a round further than the other
-   @param rounds - how many complete rounds to do
-*/
-void startingEffect(uint8_t rounds)
-{
-	for (uint16_t i = 0; i < NUM_LEDS_RING * rounds; i++)
-	{
-		uint16_t j = i + (NUM_LEDS_RING / 2);
-		ledsOfRing[i % NUM_LEDS_RING] = CHSV(220, 255, 255);
-		ledsOfRing[j % NUM_LEDS_RING] = CHSV(180, 255, 255);
-		FastLED.show();
-		ledsOfRing[i % NUM_LEDS_RING] = CRGB::Black;
-		ledsOfRing[j % NUM_LEDS_RING] = CRGB::Black;
-		delay(50);
 	}
 }
 /*
