@@ -22,7 +22,7 @@
 #define BT_NEXT         5
 #define LED_STRIP_PIN   6
 #define TRANSISTOR_PIN  7 // Turns on radio telephone channel
-#define BLUETOOTH_PIN0  8 // Turns on bluetoothState module
+#define BLUETOOTH_PIN0  8 // Turns on bluetooth module
 #define BLUETOOTH_PIN1  9 // Bluetooth shares power from 2 pins
 #define CAN_CS_PIN      10
 
@@ -34,7 +34,7 @@
 #define O_SID_PRIORITY  0x358
 #define TEXT_PRIORITY   0x368
 #define LIGHTING        0x410
-#define ENGINE          0x460
+#define SPEED_RPM       0x460
 
 /*** ID's for devices talking to SID ***/
 #define SPA             0x12
@@ -71,7 +71,7 @@
 #define LIGHT1          3
 #define LIGHT0          4
 
-/*    ENGINE    */
+/*    SPEED AND RPM    */
 #define RPM1            1
 #define RPM0            2
 #define SPD1            3
@@ -95,10 +95,9 @@
 #define LETTERS_IN_MSG 5
 
 /*** LED ***/
-#define HUE_GREEN 100
-
-#define NUM_LEDS_RING 12
-#define NUM_LEDS_STRIP 9
+#define NUM_LEDS_RING    12
+#define NUM_LEDS_STRIP   9
+#define STRIP_BRIGHTNESS 180
 
 MCP_CAN CAN(CAN_CS_PIN);
 
@@ -111,6 +110,8 @@ uint8_t priorities[3];
 
 bool isBluetoothEnabled;
 bool isNightPanelEnabled;
+bool isLightLevelSet;
+bool isLedInit;
 
 void setup()
 {
@@ -118,6 +119,8 @@ void setup()
     activeMode = 0;
     isBluetoothEnabled = false;
     isNightPanelEnabled = false;
+    isLightLevelSet = false;
+    isLedInit = false;
 #if DEBUG
     Serial.begin(115200);
 #endif
@@ -134,15 +137,30 @@ void setup()
     }
     CAN.setMode(MCP_NORMAL);
 #endif
-#if LED
-    ledBegin();
-#endif
 }
 
 void loop()
 {
 #if LED
-    spinner();
+if (isLightLevelSet) 
+{
+    if (isLedInit)
+    {
+        EVERY_N_MILLISECONDS(85) 
+        {
+            fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, STRIP_BRIGHTNESS));
+            spinner();
+            FastLED.show();
+        }
+    }
+    else
+    {    
+        EVERY_N_MILLISECONDS(50)
+        {
+            ledInit();
+        }
+    }
+}
 #endif
 #if CANBUS
     readCanBus();
@@ -179,19 +197,24 @@ void previousTrack()
 /*
 	Animate LED's on startup
 */
-void ledBegin()
+void ledInit()
 {
-    constexpr float fRatio = (float)NUM_LEDS_STRIP / (float)NUM_LEDS_RING;
-    for (uint8_t i = 0; i < NUM_LEDS_RING; i++)
+    static uint8_t i = 0;
+    static uint8_t brightness = 0;
+    constexpr uint8_t bIncrement = STRIP_BRIGHTNESS / NUM_LEDS_RING;
+    uint8_t j = i + (NUM_LEDS_RING / 2);
+
+    brightness += bIncrement;
+    ledsOfRing[i % NUM_LEDS_RING] = CHSV(220, 255, 255);
+    ledsOfRing[j % NUM_LEDS_RING] = CHSV(180, 255, 255);
+    fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, brightness));
+    FastLED.show();
+    ledsOfRing[i % NUM_LEDS_RING] = CRGB::Black;
+    ledsOfRing[j % NUM_LEDS_RING] = CRGB::Black;
+
+    if (++i >= NUM_LEDS_RING)
     {
-        uint8_t j = i + (NUM_LEDS_RING / 2);
-        ledsOfRing[i % NUM_LEDS_RING] = CHSV(220, 255, 255);
-        ledsOfRing[j % NUM_LEDS_RING] = CHSV(180, 255, 255);
-        ledsOfStrip[(uint8_t)(i * fRatio)] = CHSV(hue, 255, 160);
-        FastLED.show();
-        ledsOfRing[i % NUM_LEDS_RING] = CRGB::Black;
-        ledsOfRing[j % NUM_LEDS_RING] = CRGB::Black;
-        delay(50);
+        isLedInit = true;
     }
 }
 /*
@@ -200,13 +223,10 @@ void ledBegin()
 void spinner()
 {
     static uint8_t i = 0;
-    EVERY_N_MILLISECONDS(85)
-    {
-        ledsOfRing[i++] = CHSV(hue, 255, 255);
-        i %= NUM_LEDS_RING;
-        FastLED.show();
-        fadeToBlackBy(ledsOfRing, NUM_LEDS_RING, 85);
-    }
+
+    fadeToBlackBy(ledsOfRing, NUM_LEDS_RING, 85);
+    ledsOfRing[i++] = CHSV(hue, 255, 255);
+    i %= NUM_LEDS_RING;
 }
 /*
   Scale brightness coming from sensor for LED ring to use.
@@ -214,13 +234,6 @@ void spinner()
 uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum)
 {
     return map(val, minimum, maximum, 20, 255);
-}
-/*
-  Scale hue from green to red for LED ring.
-*/
-uint8_t scaleHue(uint16_t val, uint16_t minimum, uint16_t maximum)
-{
-    return map(val, minimum, maximum, HUE_GREEN, HUE_RED);
 }
 /*
   Reads incoming data from CAN bus, if there is any and runs desired action.
@@ -250,8 +263,8 @@ void readCanBus()
         case LIGHTING:
             lightActions(data);
             break;
-        case ENGINE:
-            engineActions(data);
+        case SPEED_RPM:
+            vehicleActions(data);
             break;
         }
     }
@@ -302,16 +315,14 @@ void sidActions(const uint8_t action)
     case UP:
         if (activeMode)
         {
-            hue += 20;
-            fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, 160));
+            hue += 32;
         }
         Serial.println("UP");
         break;
     case DOWN:
         if (activeMode)
         {
-            hue -= 20;
-            fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, 160));
+            hue -= 32;
         }
         Serial.println("DOWN");
         break;
@@ -335,11 +346,12 @@ void lightActions(uint8_t *data)
 
     uint8_t brightness = scaleBrightness(lightLevel, LIGHT_MIN, LIGHT_MAX);
     FastLED.setBrightness(isNightPanelEnabled ? 0 : brightness);
+    isLightLevelSet = true;
 }
 /*
   Read rpm and vehicle speed (km/h).
 */
-void engineActions(uint8_t *data)
+void vehicleActions(uint8_t *data)
 {
     uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
     uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
