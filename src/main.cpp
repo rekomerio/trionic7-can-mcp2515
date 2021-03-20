@@ -23,7 +23,8 @@ void setPriority(uint8_t row, uint8_t priority);
 bool allowedToWrite(uint8_t row, uint8_t writeAs);
 void sendSidMessage(const char *letters);
 uint8_t getHighBit(const uint8_t value);
-uint16_t combineBytes(uint8_t _byte1, uint8_t _byte2);
+uint16_t combineBytes(uint8_t byte1, uint8_t byte2);
+uint32_t elapsed(uint32_t time);
 
 MCP_CAN CAN(CAN_CS_PIN);
 
@@ -31,22 +32,25 @@ CRGB ledsOfRing[NUM_LEDS_RING];
 CRGB ledsOfStrip[NUM_LEDS_STRIP];
 
 uint8_t hue;
-uint8_t activeMode;
 uint8_t priorities[3];
 
 bool isBluetoothEnabled;
 bool isNightPanelEnabled;
 bool isLightLevelSet;
 bool isLedInit;
+bool areLedStripsEnabled;
+
+uint32_t clearLastPressedAt = 0;
+uint32_t setLastPressedAt = 0;
 
 void setup()
 {
     hue = HUE_GREEN;
-    activeMode = 0;
     isBluetoothEnabled = false;
     isNightPanelEnabled = false;
     isLightLevelSet = false;
     isLedInit = false;
+    areLedStripsEnabled = true;
 #if DEBUG
     Serial.begin(115200);
 #endif
@@ -83,7 +87,7 @@ void controlLeds()
         {
             EVERY_N_MILLISECONDS(85)
             {
-                fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, STRIP_BRIGHTNESS));
+                fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, areLedStripsEnabled ? STRIP_BRIGHTNESS : 0));
                 spinner();
                 FastLED.show();
             }
@@ -109,7 +113,7 @@ void toggleBluetooth()
     digitalWrite(TRANSISTOR_PIN, isBluetoothEnabled);
 }
 
-const char* nextTrackStr = "NEXT TRACK  ";
+const char *nextTrackStr = "NEXT TRACK  ";
 
 void nextTrack()
 {
@@ -120,7 +124,7 @@ void nextTrack()
     pinMode(BT_NEXT, INPUT);
 }
 
-const char* prevTrackStr = "PREV TRACK  ";
+const char *prevTrackStr = "PREV TRACK  ";
 
 void previousTrack()
 {
@@ -250,25 +254,27 @@ void sidActions(const uint8_t action)
         DEBUG_MESSAGE("NIGHT PANEL");
         break;
     case SID_BUTTON::UP:
-        if (activeMode)
-        {
-            hue += 32;
-        }
         DEBUG_MESSAGE("UP");
         break;
     case SID_BUTTON::DOWN:
-        if (activeMode)
-        {
-            hue -= 32;
-        }
         DEBUG_MESSAGE("DOWN");
         break;
     case SID_BUTTON::SET:
-        activeMode++;
+        if (elapsed(setLastPressedAt) < 500)
+        {
+            areLedStripsEnabled = true;
+            DEBUG_MESSAGE("SET DOUBLETAP");
+        }
+        setLastPressedAt = millis();
         DEBUG_MESSAGE("SET");
         break;
     case SID_BUTTON::CLR:
-        activeMode = 0;
+        if (elapsed(clearLastPressedAt) < 500)
+        {
+            areLedStripsEnabled = false;
+            DEBUG_MESSAGE("CLEAR DOUBLETAP");
+        }
+        clearLastPressedAt = millis();
         DEBUG_MESSAGE("CLEAR");
         break;
     }
@@ -377,7 +383,12 @@ uint8_t getHighBit(const uint8_t value)
     return 0xFF;
 }
 
-uint16_t combineBytes(uint8_t _byte1, uint8_t _byte2)
+uint16_t combineBytes(uint8_t byte1, uint8_t byte2)
 {
-    return (_byte1 << 8 | _byte2);
+    return (byte1 << 8 | byte2);
+}
+
+uint32_t elapsed(uint32_t time)
+{
+    return millis() - time;
 }
