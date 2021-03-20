@@ -3,101 +3,27 @@
   github.com/rekomerio
 */
 
-#include <mcp_can.h>
+#include <Arduino.h>
 #include <FastLED.h>
+#include "mcp_can.h"
+#include "defines.h"
+#include "communication.h"
 
-#if defined(FASTLED_VERSION) && (FASTLED_VERSION < 3001000)
-#MAX "Requires FastLED 3.1 or later; check github for latest code."
-#endif
-
-/*** ENABLE FUNCTIONALITIES ***/
-#define LED             1
-#define CANBUS          1
-#define DEBUG           0
-
-/*** DATA PINS ***/
-#define BUTTON_PIN      2
-#define LED_RING_PIN    3
-#define BT_PREVIOUS     4
-#define BT_NEXT         5
-#define LED_STRIP_PIN   6
-#define TRANSISTOR_PIN  7 // Turns on radio telephone channel
-#define BLUETOOTH_PIN0  8 // Turns on bluetooth module
-#define BLUETOOTH_PIN1  9 // Bluetooth shares power from 2 pins
-#define CAN_CS_PIN      10
-
-/*** CAN addresses ***/
-#define IBUS_BUTTONS    0x290
-#define RADIO_MSG       0x328
-#define RADIO_PRIORITY  0x348
-#define O_SID_MSG       0x33F
-#define O_SID_PRIORITY  0x358
-#define TEXT_PRIORITY   0x368
-#define LIGHTING        0x410
-#define SPEED_RPM       0x460
-
-/*** ID's for devices talking to SID ***/
-#define SPA             0x12
-#define RADIO           0x19
-#define TRIONIC         0x21
-#define ACC             0x23
-#define TWICE           0x2D
-#define OPEN_SID        0x32
-
-/*** CAN bytes ***/
-#define AUDIO           2
-#define SID             3
-
-/*** CAN bits ***/
-
-/*   AUDIO      */
-#define NXT             2
-#define SEEK_DOWN       3
-#define SEEK_UP         4
-#define SRC             5
-#define VOL_UP          6
-#define VOL_DOWN        7
-
-/*    SID       */
-#define NPANEL          3
-#define UP              4
-#define DOWN            5
-#define SET             6
-#define CLR             7
-
-/*    LIGHTING  */
-#define DIMM1           1
-#define DIMM0           2
-#define LIGHT1          3
-#define LIGHT0          4
-
-/*    SPEED AND RPM    */
-#define RPM1            1
-#define RPM0            2
-#define SPD1            3
-#define SPD0            4
-
-/*** CAN speeds for Trionic 7 ***/
-#define I_BUS CAN_47KBPS
-#define P_BUS CAN_500KBPS
-
-/*
-   Range for light level sensor depends on SID version.
-   Dimmer values might also vary.
-*/
-#define LIGHT_MAX   0xC7FB
-#define LIGHT_MIN   0x2308
-#define DIMMER_MAX  0xFE9D
-#define DIMMER_MIN  0x423F
-
-/*** SID message ***/
-#define MESSAGE_LENGTH 12
-#define LETTERS_IN_MSG 5
-
-/*** LED ***/
-#define NUM_LEDS_RING    12
-#define NUM_LEDS_STRIP   9
-#define STRIP_BRIGHTNESS 180
+void controlLeds();
+void readCanBus();
+void spinner();
+void ledInit();
+uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum);
+void readCanBus();
+void steeringWheelActions(const uint8_t action);
+void sidActions(const uint8_t action);
+void lightActions(uint8_t *data);
+void vehicleActions(uint8_t *data);
+void setPriority(uint8_t row, uint8_t priority);
+bool allowedToWrite(uint8_t row, uint8_t writeAs);
+void sendSidMessage(const char *letters);
+uint8_t getHighBit(const uint8_t value);
+uint16_t combineBytes(uint8_t _byte1, uint8_t _byte2);
 
 MCP_CAN CAN(CAN_CS_PIN);
 
@@ -142,30 +68,36 @@ void setup()
 void loop()
 {
 #if LED
-if (isLightLevelSet) 
-{
-    if (isLedInit)
-    {
-        EVERY_N_MILLISECONDS(85) 
-        {
-            fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, STRIP_BRIGHTNESS));
-            spinner();
-            FastLED.show();
-        }
-    }
-    else
-    {    
-        EVERY_N_MILLISECONDS(50)
-        {
-            ledInit();
-        }
-    }
-}
+    controlLeds();
 #endif
 #if CANBUS
     readCanBus();
 #endif
 }
+
+void controlLeds()
+{
+    if (isLightLevelSet)
+    {
+        if (isLedInit)
+        {
+            EVERY_N_MILLISECONDS(85)
+            {
+                fill_solid(ledsOfStrip, NUM_LEDS_STRIP, CHSV(hue, 255, STRIP_BRIGHTNESS));
+                spinner();
+                FastLED.show();
+            }
+        }
+        else
+        {
+            EVERY_N_MILLISECONDS(50)
+            {
+                ledInit();
+            }
+        }
+    }
+}
+
 /*
    Turn bluetooth on or off
 */
@@ -177,18 +109,22 @@ void toggleBluetooth()
     digitalWrite(TRANSISTOR_PIN, isBluetoothEnabled);
 }
 
+const char* nextTrackStr = "NEXT TRACK  ";
+
 void nextTrack()
 {
-    sendSidMessage("NEXT TRACK  ");
+    sendSidMessage(nextTrackStr);
     pinMode(BT_NEXT, OUTPUT);
     digitalWrite(BT_NEXT, LOW);
     delay(70);
     pinMode(BT_NEXT, INPUT);
 }
 
+const char* prevTrackStr = "PREV TRACK  ";
+
 void previousTrack()
 {
-    sendSidMessage("PREV TRACK  ");
+    sendSidMessage(prevTrackStr);
     pinMode(BT_PREVIOUS, OUTPUT);
     digitalWrite(BT_PREVIOUS, LOW);
     delay(70);
@@ -240,7 +176,6 @@ uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum)
 */
 void readCanBus()
 {
-    uint8_t action;
     uint8_t len;
     uint8_t data[8];
     long unsigned id;
@@ -248,91 +183,93 @@ void readCanBus()
     if (CAN.checkReceive() == CAN_MSGAVAIL)
     {
         CAN.readMsgBuf(&id, &len, data);
-        switch (id)
+        switch (static_cast<CAN_ID>(id))
         {
-        case IBUS_BUTTONS:
-            action = getHighBit(data[AUDIO]);
-            audioActions(action);
+        case CAN_ID::IBUS_BUTTONS:
+        {
+            uint8_t action = getHighBit(data[AUDIO]);
+            steeringWheelActions(action);
 
             action = getHighBit(data[SID]);
             sidActions(action);
             break;
-        case TEXT_PRIORITY:
+        }
+        case CAN_ID::TEXT_PRIORITY:
             setPriority(data[0], data[1]);
             break;
-        case LIGHTING:
+        case CAN_ID::LIGHTING:
             lightActions(data);
             break;
-        case SPEED_RPM:
+        case CAN_ID::SPEED_RPM:
             vehicleActions(data);
             break;
         }
     }
 }
 
-void audioActions(const uint8_t action)
+void steeringWheelActions(const uint8_t action)
 {
-    switch (action)
+    switch (static_cast<STEERING_WHEEL>(action))
     {
-    case NXT:
-        Serial.println("NEXT");
+    case STEERING_WHEEL::NXT:
+        DEBUG_MESSAGE("NEXT");
         break;
-    case SEEK_DOWN:
+    case STEERING_WHEEL::SEEK_DOWN:
         if (isBluetoothEnabled)
         {
             previousTrack();
         }
-        Serial.println("SEEK DOWN");
+        DEBUG_MESSAGE("SEEK DOWN");
         break;
-    case SEEK_UP:
+    case STEERING_WHEEL::SEEK_UP:
         if (isBluetoothEnabled)
         {
             nextTrack();
         }
-        Serial.println("SEEK UP");
+        DEBUG_MESSAGE("SEEK UP");
         break;
-    case SRC:
+    case STEERING_WHEEL::SRC:
         toggleBluetooth();
-        Serial.println("SRC");
+        DEBUG_MESSAGE("SRC");
         break;
-    case VOL_UP:
-        Serial.println("VOL+");
+    case STEERING_WHEEL::VOL_UP:
+        DEBUG_MESSAGE("VOL+");
         break;
-    case VOL_DOWN:
-        Serial.println("VOL-");
+    case STEERING_WHEEL::VOL_DOWN:
+        DEBUG_MESSAGE("VOL-");
         break;
     }
 }
 
 void sidActions(const uint8_t action)
 {
-    switch (action)
+    switch (static_cast<SID_BUTTON>(action))
     {
-    case NPANEL:
+    case SID_BUTTON::NPANEL:
         isNightPanelEnabled = !isNightPanelEnabled;
-        Serial.println("NIGHT PANEL");
+        DEBUG_MESSAGE("NIGHT PANEL");
         break;
-    case UP:
+    case SID_BUTTON::UP:
         if (activeMode)
         {
             hue += 32;
         }
-        Serial.println("UP");
+        DEBUG_MESSAGE("UP");
         break;
-    case DOWN:
+    case SID_BUTTON::DOWN:
         if (activeMode)
         {
             hue -= 32;
         }
-        Serial.println("DOWN");
+        DEBUG_MESSAGE("DOWN");
         break;
-    case SET:
+    case SID_BUTTON::SET:
         activeMode++;
-        Serial.println("SET");
+        DEBUG_MESSAGE("SET");
         break;
-    case CLR:
+    case SID_BUTTON::CLR:
         activeMode = 0;
-        Serial.println("CLEAR");
+        DEBUG_MESSAGE("CLEAR");
         break;
     }
 }
@@ -341,7 +278,7 @@ void sidActions(const uint8_t action)
 */
 void lightActions(uint8_t *data)
 {
-    uint16_t dimmer = combineBytes(data[DIMM1], data[DIMM0]);
+    // uint16_t dimmer = combineBytes(data[DIMM1], data[DIMM0]);
     uint16_t lightLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
 
     uint8_t brightness = scaleBrightness(lightLevel, LIGHT_MIN, LIGHT_MAX);
@@ -353,8 +290,8 @@ void lightActions(uint8_t *data)
 */
 void vehicleActions(uint8_t *data)
 {
-    uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
-    uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
+    // uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
+    // uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
 }
 /*
   Set current priority for all SID rows.
@@ -384,64 +321,37 @@ bool allowedToWrite(uint8_t row, uint8_t writeAs)
     return false;
 }
 /*
-  Request SID to not display message from radio on row 2.
-*/
-void doNotDisplay()
-{
-    uint8_t data[] = {0x11, 0x02, 0xFF, RADIO, 0, 0, 0, 0};
-    CAN.sendMsgBuf(RADIO_PRIORITY, 0, 8, data);
-}
-/*
-  Request write to SID row 2 as OPEN SID
-*/
-void requestWrite()
-{
-    uint8_t data[] = {0x21, 0x02, 0x03, OPEN_SID, 0, 0, 0, 0};
-    CAN.sendMsgBuf(O_SID_PRIORITY, 0, 8, data);
-}
-/*
     Message is sent to address that radio uses for writing to SID.
     Message length needs to be 12 characters, so if your message is not that long, simply add spaces to fill it up,
     or otherwise there will be some trash written on the SID.
 */
-void sendSidMessage(char *letters)
+void sendSidMessage(const char *letters)
 {
     if (allowedToWrite(2, RADIO))
     { // Check if it's ok to write as RADIO to row 2.
         uint8_t message[8];
-        enum BYTE
-        {
-            ORDER,
-            IDK,
-            ROW,
-            LETTER0,
-            LETTER1,
-            LETTER2,
-            LETTER3,
-            LETTER4
-        };
-        message[ORDER] = 0x42; // Must be 0x42 on the first msg, when message length is equal to 12
-        message[IDK] = 0x96;   // Unknown, potentially SID id?
-        message[ROW] = 0x02;   // Row 2
+        message[SID_MESSAGE::ORDER] = 0x42; // Must be 0x42 on the first msg, when message length is equal to 12
+        message[SID_MESSAGE::IDK] = 0x96;   // Unknown, potentially SID id?
+        message[SID_MESSAGE::ROW] = 0x02;   // Row 2
         for (uint8_t i = 0; i < 3; i++)
         { // Group of 3 messages need to be sent
             if (i > 0)
             {
-                message[ORDER] = 2 - i; // 2nd message: order is 1, 3rd message: order is 0
+                message[SID_MESSAGE::ORDER] = 2 - i; // 2nd message: order is 1, 3rd message: order is 0
             }
             for (uint8_t j = 0; j < LETTERS_IN_MSG; j++)
             {
                 uint8_t letter = i * LETTERS_IN_MSG + j;
                 if (letters[letter] && letter < MESSAGE_LENGTH)
                 {
-                    message[LETTER0 + j] = letters[letter];
+                    message[SID_MESSAGE::LETTER0 + j] = letters[letter];
                 }
                 else
                 {
-                    message[LETTER0 + j] = 0x00;
+                    message[SID_MESSAGE::LETTER0 + j] = 0x00;
                 }
             }
-            CAN.sendMsgBuf(RADIO_MSG, 0, 8, message);
+            CAN.sendMsgBuf(static_cast<uint8_t>(CAN_ID::RADIO_MSG), 0, 8, message);
             delay(10);
         }
     }
@@ -464,6 +374,7 @@ uint8_t getHighBit(const uint8_t value)
             return i;
         }
     }
+    return 0xFF;
 }
 
 uint16_t combineBytes(uint8_t _byte1, uint8_t _byte2)
