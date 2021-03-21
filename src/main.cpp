@@ -357,7 +357,7 @@ void sendSidMessage(const char *letters)
                     message[SID_MESSAGE::LETTER0 + j] = 0x00;
                 }
             }
-            CAN.sendMsgBuf(static_cast<uint8_t>(CAN_ID::RADIO_MSG), 0, 8, message);
+            CAN.sendMsgBuf(static_cast<unsigned long>(CAN_ID::RADIO_MSG), 0, 8, message);
             delay(10);
         }
     }
