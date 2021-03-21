@@ -15,10 +15,10 @@ void spinner();
 void ledInit();
 uint8_t scaleBrightness(uint16_t val, uint16_t minimum, uint16_t maximum);
 void readCanBus();
-void steeringWheelActions(const uint8_t action);
-void sidActions(const uint8_t action);
-void lightActions(uint8_t *data);
-void vehicleActions(uint8_t *data);
+void steeringWheelActions(STEERING_WHEEL action);
+void sidActions(SID_BUTTON action);
+void lightActions(const uint8_t *data);
+void vehicleActions(const uint8_t *data);
 void setPriority(uint8_t row, uint8_t priority);
 bool allowedToWrite(uint8_t row, uint8_t writeAs);
 void sendSidMessage(const char *letters);
@@ -40,8 +40,11 @@ bool isLightLevelSet;
 bool isLedInit;
 bool areLedStripsEnabled;
 
-uint32_t clearLastPressedAt = 0;
-uint32_t setLastPressedAt = 0;
+struct 
+{
+    uint32_t clearLastPressedAt = 0;
+    uint32_t setLastPressedAt = 0;
+} sidButtons;
 
 void setup()
 {
@@ -192,10 +195,10 @@ void readCanBus()
         case CAN_ID::IBUS_BUTTONS:
         {
             uint8_t action = getHighBit(data[AUDIO]);
-            steeringWheelActions(action);
+            steeringWheelActions(static_cast<STEERING_WHEEL>(action));
 
             action = getHighBit(data[SID]);
-            sidActions(action);
+            sidActions(static_cast<SID_BUTTON>(action));
             break;
         }
         case CAN_ID::TEXT_PRIORITY:
@@ -211,9 +214,9 @@ void readCanBus()
     }
 }
 
-void steeringWheelActions(const uint8_t action)
+void steeringWheelActions(STEERING_WHEEL action)
 {
-    switch (static_cast<STEERING_WHEEL>(action))
+    switch (action)
     {
     case STEERING_WHEEL::NXT:
         DEBUG_MESSAGE("NEXT");
@@ -245,9 +248,9 @@ void steeringWheelActions(const uint8_t action)
     }
 }
 
-void sidActions(const uint8_t action)
+void sidActions(SID_BUTTON action)
 {
-    switch (static_cast<SID_BUTTON>(action))
+    switch (action)
     {
     case SID_BUTTON::NPANEL:
         isNightPanelEnabled = !isNightPanelEnabled;
@@ -260,21 +263,21 @@ void sidActions(const uint8_t action)
         DEBUG_MESSAGE("DOWN");
         break;
     case SID_BUTTON::SET:
-        if (elapsed(setLastPressedAt) < 500)
+        if (elapsed(sidButtons.setLastPressedAt) < 500)
         {
             areLedStripsEnabled = true;
             DEBUG_MESSAGE("SET DOUBLETAP");
         }
-        setLastPressedAt = millis();
+        sidButtons.setLastPressedAt = millis();
         DEBUG_MESSAGE("SET");
         break;
     case SID_BUTTON::CLR:
-        if (elapsed(clearLastPressedAt) < 500)
+        if (elapsed(sidButtons.clearLastPressedAt) < 500)
         {
             areLedStripsEnabled = false;
             DEBUG_MESSAGE("CLEAR DOUBLETAP");
         }
-        clearLastPressedAt = millis();
+        sidButtons.clearLastPressedAt = millis();
         DEBUG_MESSAGE("CLEAR");
         break;
     }
@@ -282,7 +285,7 @@ void sidActions(const uint8_t action)
 /*
   Read value of manual dimmer and light level sensor in SID.
 */
-void lightActions(uint8_t *data)
+void lightActions(const uint8_t *data)
 {
     // uint16_t dimmer = combineBytes(data[DIMM1], data[DIMM0]);
     uint16_t lightLevel = combineBytes(data[LIGHT1], data[LIGHT0]);
@@ -294,7 +297,7 @@ void lightActions(uint8_t *data)
 /*
   Read rpm and vehicle speed (km/h).
 */
-void vehicleActions(uint8_t *data)
+void vehicleActions(const uint8_t *data)
 {
     // uint16_t rpm = combineBytes(data[RPM1], data[RPM0]);
     // uint16_t spd = combineBytes(data[SPD1], data[SPD0]) / 10;
@@ -368,7 +371,7 @@ void sendSidMessage(const char *letters)
   @param value
   @return - first high bit of the given value or 0xFF
 */
-uint8_t getHighBit(const uint8_t value)
+uint8_t getHighBit(uint8_t value)
 {
     if (!value)
         return 0xFF;
