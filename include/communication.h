@@ -1,3 +1,5 @@
+#pragma once
+
 enum SID_MESSAGE
 {
     ORDER,

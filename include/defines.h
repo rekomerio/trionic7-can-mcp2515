@@ -1,8 +1,8 @@
+#pragma once
+
 #include <Arduino.h>
 
 /*** ENABLE FUNCTIONALITIES ***/
-#define LED             1
-#define CANBUS          1
 #define DEBUG           0
 
 /*** DATA PINS ***/
