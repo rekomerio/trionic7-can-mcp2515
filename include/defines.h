@@ -81,13 +81,14 @@
 #define DIMMER_MIN  0x423F
 
 /*** SID message ***/
-#define MESSAGE_LENGTH 12
-#define LETTERS_IN_MSG 5
+#define SID_MAX_CHAR 12
 
 /*** LED ***/
 #define NUM_LEDS_RING    12
 #define NUM_LEDS_STRIP   9
 #define STRIP_BRIGHTNESS 180
+
+#define MESSAGE_MAX_LENGTH 32
 
 #if DEBUG
 #define DEBUG_MESSAGE(msg) Serial.println(msg);

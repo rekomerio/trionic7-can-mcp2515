@@ -62,8 +62,7 @@ void toggleBluetooth()
 
 void nextTrack()
 {
-    const static char *nextTrackStr = "NEXT TRACK";
-    sidMessageHandler.sendMessage(nextTrackStr, 800);
+    sidMessageHandler.sendMessage("NEXT TRACK", 800);
     pinMode(BT_NEXT, OUTPUT);
     digitalWrite(BT_NEXT, LOW);
     delay(70);
@@ -72,8 +71,7 @@ void nextTrack()
 
 void previousTrack()
 {
-    const static char *prevTrackStr = "PREV TRACK";
-    sidMessageHandler.sendMessage(prevTrackStr, 800);
+    sidMessageHandler.sendMessage("PREVIOUS TRACK", 800);
     pinMode(BT_PREVIOUS, OUTPUT);
     digitalWrite(BT_PREVIOUS, LOW);
     delay(70);
@@ -177,6 +175,7 @@ void sidActions(SID_BUTTON action)
         if (elapsed(sidButtons.setLastPressedAt) < 500)
         {
             ledController.config.areLedStripsEnabled = true;
+            sidMessageHandler.sendMessage("LEDS ON", 500);
             DEBUG_MESSAGE("SET DOUBLETAP");
         }
         sidButtons.setLastPressedAt = millis();
@@ -186,8 +185,10 @@ void sidActions(SID_BUTTON action)
         if (elapsed(sidButtons.clearLastPressedAt) < 500)
         {
             ledController.config.areLedStripsEnabled = false;
+            sidMessageHandler.sendMessage("LEDS OFF", 500);
             DEBUG_MESSAGE("CLEAR DOUBLETAP");
         }
+        sidMessageHandler.cancelMessage();
         sidButtons.clearLastPressedAt = millis();
         DEBUG_MESSAGE("CLEAR");
         break;

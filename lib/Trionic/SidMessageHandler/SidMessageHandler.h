@@ -2,10 +2,10 @@
 #include "mcp_can.h"
 #include "../../include/defines.h"
 #include "../../include/communication.h"
+#include "../util/util.h"
 
 class SidMessageHandler
 {
-
     enum class DisplayedMessage : uint8_t
     {
         User,
@@ -23,14 +23,27 @@ public:
 
 private:
     bool sendMessage(uint8_t *buffer, DisplayedMessage displayedMessage);
-    void constructMessage(const char *message, uint8_t *buffer);
+    void constructMessage(const char *message, uint8_t *buffer, uint8_t length);
+
+    struct {
+        // Original string is stored here in case we need to roll it
+        char messageString[MESSAGE_MAX_LENGTH];
+        uint8_t messageLength;
+        // SID message is stored here
+        uint8_t messageBuffer[24];
+        uint32_t messageSentAt;
+        uint16_t messageDisplayTime;
+    } _user;
+
+    struct {
+        uint8_t rollingIndex;
+        uint16_t rollingDelay;
+        uint32_t lastRolledAt;
+    } _messageRolling;
 
     bool _isReceivedMessageComplete;
     uint8_t _receivedMessageBuffer[24];
-    uint8_t _userMessageBuffer[24];
     uint8_t _priorities[3];
-    uint32_t _userMessageSentAt;
-    uint16_t _userMessageDisplayTime;
     DisplayedMessage _displayedMessage;
     MCP_CAN *CAN;
 };
